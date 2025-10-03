@@ -1,0 +1,113 @@
+version: <number>
+id: <task_id>_B_impl
+title: <string> (Part B — Implementation & Enhancements)
+
+depends_on:
+  - <task_id>_A_tests_first
+
+summary: >
+  Implement production logic to satisfy Part A specs. Remove xfail markers, make tests green,
+  and (optionally) add telemetry, security, and performance enhancements.
+
+description: >
+  Deliver full implementation matching the contracts defined in Part A. Add observability,
+  security, and CLI polish as needed. Ensure deterministic behavior where required.
+
+component_ids: [ <string>, <string> ]
+arg_spec: [ <string> ]
+
+# Reuse the same anchors as Part A if needed (copy or import in your generator)
+x-volatile-fields: &volatile_fields [ ts, durationMs, runId, traceId, spanId, attemptId, requestId ]
+x-log-event-fields: &log_event_fields
+  - ts; agentId; taskId; stepId; transport; route; method; traceId; spanId
+  - requestId; status; durationMs; attempt; inputBytes; outputBytes; error; metadata
+
+# Include any type-specific contracts that apply to this implementation
+server_contract:    # (optional; if present in Part A, reference or finalize here)
+classes_contract:   # (optional)
+interfaces_contract:# (optional)
+cli_contract:       # (optional)
+schema_contract:    # (optional)
+toolpack_contract:  # (optional)
+datastore_contract: # (optional)
+
+structured_logging_contract: # (recommended if applicable)
+  format: jsonl
+  storage_path_prefix: runs/<area>/<task>
+  latest_symlink: runs/<area>/<task>.latest.jsonl
+  retention: keep-last-5
+  event_fields: *log_event_fields
+  metadata_fields: [ runId, attemptId, schemaVersion, deterministic ]
+  volatile_fields: *volatile_fields
+
+# Optional production add-ons (keep out of Part A to reduce complexity)
+metrics_contract:    # (optional)
+  counters:
+    - { name: requests_total, labels: [route, status] }
+  histograms:
+    - { name: request_duration_seconds, labels: [route, status] }
+
+tracing_contract:    # (optional)
+  spans:
+    - { name: http.request, attributes: [route, requestId] }
+    - { name: stdio.message, attributes: [route, requestId] }
+
+security_privacy:    # (optional)
+  authn: [ bearer_http ]
+  pii_redaction:
+    denylist_keys: [ authorization, apiKey, password, token ]
+    policy: strip-before-serialize
+
+log_diff_strategy:   # (optional)
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/<area>/<task>_golden.jsonl
+  whitelist_fields: *volatile_fields
+
+artifacts:
+  code:
+    - src/<pkg>/<module>.py         # actual implementations
+  scripts:
+    - scripts/<task>_maintenance.sh
+  docs:
+    - docs/<area>/<task>_impl.md
+  structured_logs:
+    - runs/<area>/<task>.latest.jsonl
+
+test_plan:
+  unit:
+    - tests/unit/<module>/test_<topic>_spec.py   # now must pass (xfail removed)
+  integration:
+    - tests/integration/<topic>/test_round_trip_spec.py
+  e2e:
+    - tests/e2e/test_<task>.py
+  property_based:
+    - tests/property/test_<topic>_contracts.py   # optional but recommended
+
+ci:
+  matrix:
+    python: [ "3.11", "3.12" ]
+  gates: [ lint, typecheck, unit, integration, e2e, acceptance ]
+
+actions:
+  - stage: implementation
+    summary: Replace stubs with real logic; satisfy all Part A tests.
+    tasks:
+      - implement classes/interfaces/CLI per contracts
+      - integrate schemas/toolpacks/datastore as specified
+      - deterministic behavior where required (RAGX_SEED, stable sorting)
+  - stage: observability
+    summary: Add logging/metrics/tracing if included in this part.
+    tasks:
+      - emit JSONL logs and verify schema
+      - expose /metrics and ensure spans propagate ids
+  - stage: hardening
+    summary: Security, limits, and performance tuning as needed.
+    tasks:
+      - add authn/z, input caps, timeouts
+      - switch to fast JSON codec, cache hot paths
+
+acceptance:
+  - All Part A tests now pass; no xfail markers remain for this task.
+  - CI gates green across matrix.
+  - (If logging present) logs validate; DeepDiff passes with whitelist.
+  - Documentation updated (impl + ops notes).

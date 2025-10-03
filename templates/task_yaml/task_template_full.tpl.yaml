@@ -1,0 +1,320 @@
+version: <number>
+id: <task_id>
+title: <string>
+summary: >
+  <high-level summary of the overall effort>
+
+description: >
+  <narrative describing goals, constraints, success criteria, and context>
+
+metadata:
+  owners: [ "you@example.com" ]
+  labels: [ "tests-first", "impl", "observability", "mcp" ]
+  priority: P1            # P0..P3
+  risk: medium            # low/medium/high
+  last_updated: "<YYYY-MM-DD>"
+  links:
+    - { type: "design_doc", url: "<url>" }
+    - { type: "tracking_issue", url: "<url>" }
+  tickets: [ "<JIRA-1234>" ]
+
+strategy:
+  tests_first: true       # keep true to generate tests/specs before implementation
+  deterministic: true     # enforce seeds/sorting for fixtures
+  golden_management: manual|label-gated
+
+scope:
+  goals:
+    - <goal 1>
+    - <goal 2>
+  non_goals:
+    - <explicitly out-of-scope item>
+
+assumptions:
+  - <assumption 1>
+constraints:
+  - <constraint 1, e.g., "camelCase keys on disk", "Draft 2020-12">
+
+component_ids: [ <string>, <string> ]
+depends_on: [ <string>, <string> ]
+arg_spec: [ <string>, <string> ]
+
+config_flags:
+  - { name: "--host", env: "MCP_HOST", default: "0.0.0.0", type: "str",  desc: "HTTP bind host" }
+  - { name: "--port", env: "MCP_PORT", default: 8070,      type: "int",  desc: "HTTP bind port" }
+  - { name: "--once", env: null,       default: false,     type: "bool", desc: "Serve one request then exit (deterministic)" }
+  - { name: "--deterministic-ids", env: "MCP_DETERMINISTIC_IDS", default: false, type: "bool", desc: "UUID5 requestId for goldens" }
+  - { name: "--log-level", env: "MCP_LOG_LEVEL", default: "info", type: "str", desc: "Log verbosity" }
+
+observability_requirements:
+  - Emit structured JSONL logs with required fields and flush-on-write.
+  - Retain last 5 runs and maintain a stable "latest" symlink.
+  - Record retries/errors explicitly; graceful shutdown must flush logs.
+
+# ---------- Reusable anchors (x-*) ----------
+x-volatile-fields: &volatile_fields [ ts, durationMs, runId, traceId, spanId, attemptId, requestId ]
+x-log-event-fields: &log_event_fields
+  - ts
+  - agentId
+  - taskId
+  - stepId
+  - transport
+  - route
+  - method
+  - traceId
+  - spanId
+  - requestId
+  - status
+  - durationMs
+  - attempt
+  - inputBytes
+  - outputBytes
+  - error
+  - metadata
+x-ci-gates: &ci_gates [ lint, typecheck, unit, integration, e2e, acceptance ]
+x-python-matrix: &python_matrix [ "3.11", "3.12" ]
+x-os-matrix: &os_matrix [ "ubuntu-latest" ]
+# ------------------------------------------
+
+# ===== Optional, include only the sections relevant to this task type =====
+
+server_contract:  # (optional)
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - { method: GET,  path: /mcp/discover,          response: envelope }
+        - { method: GET,  path: /mcp/prompt/{promptId}, response: envelope }
+        - { method: POST, path: /mcp/tool/{toolId},     response: envelope }
+        - { method: GET,  path: /healthz,               response: { status: ok } }
+      shutdown: graceful (await tasks, flush logs)
+    stdio:
+      protocol: json-rpc 2.0 (newline-delimited)
+      lifecycle:
+        - read JSON from stdin
+        - validate & dispatch to service
+        - write JSON to stdout; flush per message
+      control: [ cancel, graceful_shutdown ]
+  shared_service:
+    class: <ServiceClassName>
+    methods: [ discover, get_prompt, invoke_tool, health ]
+    behavior:
+      - validate inputs/outputs against schemas
+      - deterministic seed (RAGX_SEED) + stable sorting
+      - return envelope with ok|error and trace/span ids
+  cli:
+    command: <cli_command>
+    flags: [ --http, --stdio, --host, --port, --once, --deterministic-ids, --log-level ]
+
+classes_contract:  # (optional)
+  language: python
+  classes:
+    - name: <ClassName>
+      responsibilities: [ <single responsibility> ]
+      methods:
+        - signature: def do_work(self, item: Item) -> Result
+          raises: [ ValueError ]
+          invariants: [ idempotent, pure ]
+    - name: <OtherClass>
+      methods:
+        - signature: @classmethod def from_config(cls, cfg: dict) -> "OtherClass"
+
+interfaces_contract:  # (optional)
+  protocols:
+    - name: <InterfaceName>
+      methods:
+        - name: fetch
+          params: [ url: str, timeout: float ]
+          returns: bytes
+
+cli_contract:  # (optional)
+  program: <cli_command>
+  commands:
+    - name: build
+      flags:
+        - { name: --input,  type: path, required: true }
+        - { name: --output, type: path, required: true }
+      exit_codes:
+        - { code: 0, meaning: ok }
+        - { code: 2, meaning: invalid input }
+
+schema_contract:  # (optional)
+  draft: 2020-12
+  files:
+    - path: apps/schemas/<name>.schema.json
+      kind: input|output
+      required_fields: [ <fieldA>, <fieldB> ]
+
+toolpack_contract:  # (optional)
+  manifests:
+    - apps/mcp_server/toolpacks/core/<name>.tool.yaml
+  deterministic: true
+
+datastore_contract:  # (optional)
+  engine: sqlite|postgres
+  schemas:
+    - name: <table>
+      columns:
+        - { name: id,         type: TEXT,      pk: true }
+        - { name: created_at, type: TIMESTAMP }
+      indexes:
+        - { fields: [created_at], unique: false }
+  migrations_dir: db/migrations
+
+# ===== Core logging/metrics/tracing/security (toggle on as needed) =====
+
+structured_logging_contract:
+  format: jsonl
+  storage_path_prefix: runs/<area>/<task>
+  latest_symlink: runs/<area>/<task>.latest.jsonl
+  retention: keep-last-5
+  event_fields: *log_event_fields
+  metadata_fields:
+    - runId
+    - attemptId
+    - schemaVersion
+    - deterministic
+  volatile_fields: *volatile_fields
+
+metrics_contract:  # (optional)
+  counters:
+    - { name: mcp_requests_total, labels: [transport, route, status] }
+    - { name: mcp_retries_total,  labels: [transport, route] }
+  histograms:
+    - { name: mcp_request_duration_seconds, labels: [transport, route, status] }
+  gauges:
+    - { name: mcp_stdio_queue_depth, labels: [] }
+
+tracing_contract:  # (optional)
+  spans:
+    - { name: http.request,  attributes: [transport, route, requestId] }
+    - { name: stdio.message, attributes: [transport, route, requestId] }
+  propagation: [ traceId, spanId ]
+
+security_privacy:  # (optional)
+  data_classification: internal
+  authn: [ bearer_http ]
+  authz: [ { role: "invoke:tool" } ]
+  pii_redaction:
+    denylist_keys: [ authorization, apiKey, password, token ]
+    policy: strip-before-serialize
+
+log_diff_strategy:  # (optional)
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/<area>/<task>_golden.jsonl
+  compatibility_symlink: tests/fixtures/<area>/logs/<task>_golden.jsonl
+  whitelist_fields: *volatile_fields
+  notes: >
+    Ignore volatile identifiers/timings; assert structure and event order.
+
+artifacts:
+  schemas:
+    paths:
+      - apps/schemas/<name>.schema.json
+  toolpacks:
+    paths:
+      - apps/mcp_server/toolpacks/core/<name>.tool.yaml
+  python_modules:
+    paths:
+      - src/<pkg>/<module>.py
+  structured_logs:
+    path: runs/<area>/<task>.latest.jsonl
+  golden_fixtures:
+    paths:
+      - tests/fixtures/<area>/<task>_golden.jsonl
+      - tests/fixtures/<area>/logs/<task>_golden.jsonl
+  doc_fixtures:
+    paths:
+      - tests/fixtures/<area>/<name>.json
+  documentation:
+    path: docs/<area>/<task>.md
+  log_diff_script:
+    path: scripts/diff_<task>_logs.py
+
+test_matrix:
+  python: *python_matrix
+  os: *os_matrix
+
+test_plan:
+  unit:
+    - tests/unit/<module>/test_<topic>_spec.py
+    - tests/unit/<module>/test_<topic>_errors.py
+  integration:
+    - tests/integration/<topic>/test_round_trip_spec.py
+  e2e:
+    - tests/e2e/test_<task>.py
+  property_based:
+    - tests/property/test_<topic>_contracts.py
+  fixtures:
+    - tests/fixtures/<area>/<task>_golden.jsonl
+
+ci:
+  xfail_marker: "spec_xfail"           # set on new tests until impl lands
+  workflows:
+    - name: ci
+      gates: *ci_gates
+      artifacts: [ "runs/**.jsonl", "apps/**/schemas/**.json" ]
+      cache_dependency_paths: [ "requirements*.txt" ]
+
+actions:
+  - stage: tests
+    summary: Author executable specs and fixtures (tests-first).
+    tasks:
+      - add NotImplementedError stubs matching contracts
+      - add JSON Schemas and minimal manifests
+      - add CLI skeletons without business logic
+  - stage: implementation
+    summary: Replace stubs with production logic; satisfy all specs.
+    tasks:
+      - implement classes/interfaces/CLI per contracts
+      - integrate schemas/toolpacks/datastore
+      - ensure deterministic behavior (RAGX_SEED, stable sorting)
+  - stage: observability
+    summary: Logging/metrics/tracing as applicable.
+    tasks:
+      - emit JSONL logs and validate schema
+      - expose /metrics and propagate spans
+      - enforce PII redaction
+  - stage: hardening
+    summary: Security, limits, resilience, and performance tuning.
+    tasks:
+      - add authn/z, input caps, timeouts, retries/backoff
+      - add circuit breaker/backpressure if needed
+      - switch to fast JSON codec; cache hot paths
+
+rollout_plan:
+  phases:
+    - name: dev
+      exit_criteria: [ "unit+integration green", "golden diff green" ]
+    - name: staging
+      exit_criteria: [ "metrics stable 24h", "no PII in logs" ]
+    - name: prod
+      exit_criteria: [ "SLOs met 7d", "no error spikes" ]
+
+rollback_strategy:
+  steps:
+    - revert deploy to previous artifact
+    - restore previous golden if schema reversion occurred
+    - invalidate caches and restart
+
+operational_runbooks:
+  - name: golden_diff_failed
+    steps:
+      - verify flags (RAGX_SEED, --deterministic-ids, --once)
+      - if intended change, run guarded --update-golden and open PR
+  - name: elevated_error_rate
+    steps:
+      - check rate limits/circuit breaker and recent deploys
+      - inspect /metrics and traces; roll back if needed
+
+maintenance:
+  deprecation_policy: >
+    Provide 1 minor version with dual-writing logs before changing logging schema.
+  upgrade_notes:
+    - <operator notes>
+
+acceptance:
+  - All tests pass; no xfail markers remain for this task.
+  - Logs validate against schema; DeepDiff passes with whitelist (if enabled).
+  - Rotation keeps ≤5 files; latest symlink updated.
+  - Documentation updated (spec + impl + ops notes).

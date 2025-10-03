@@ -1,0 +1,197 @@
+version: <number>
+id: <task_id>_A_tests_first
+title: <string> (Part A — Tests First)
+
+metadata:
+  owners: [ "you@example.com" ]
+  priority: P1
+  last_updated: "2025-10-03"
+  labels: [ "tests-first", "spec", "scaffold" ]
+
+summary: >
+  Author failing (or xfail) tests, fixtures, and stubs that define the contract for the task.
+  No production implementation in this part.
+
+description: >
+  Create an executable spec: schemas, test cases, fixtures, and minimal stubs that raise
+  NotImplementedError. Wire CI to collect tests. Optionally mark new tests with xfail(strict=true)
+  to keep CI green until Part B lands.
+
+scope:
+  goals:
+    - Define precise behavior via tests and schemas.
+    - Provide fixtures and contract documents.
+    - Add stubs/placeholders ONLY (no business logic).
+  non_goals:
+    - Implement production logic.
+    - Add metrics/tracing/security (defer to Part B).
+
+assumptions:
+  - <e.g., "Draft 2020-12 JSON Schema">
+constraints:
+  - <e.g., "camelCase on-disk keys">
+
+component_ids: [ <string>, <string> ]
+depends_on: [ <string> ]  # prior foundational tasks, if any
+arg_spec: [ <string> ]    # required CLIs/configs referenced in tests
+
+config_flags:
+  - { name: "--once", type: bool, default: false, desc: "single-run mode for deterministic fixtures" }
+
+# ---------- Reusable anchors for optional contracts ----------
+x-volatile-fields: &volatile_fields [ ts, durationMs, runId, traceId, spanId, attemptId, requestId ]
+x-log-event-fields: &log_event_fields
+  - ts; agentId; taskId; stepId; transport; route; method; traceId; spanId
+  - requestId; status; durationMs; attempt; inputBytes; outputBytes; error; metadata
+
+# Optional server API contract (include only if relevant)
+server_contract: # (optional)
+  transports:
+    http:
+      framework: fastapi
+      endpoints:
+        - { method: GET,  path: /mcp/discover,          response: envelope }
+        - { method: GET,  path: /mcp/prompt/{promptId}, response: envelope }
+        - { method: POST, path: /mcp/tool/{toolId},     response: envelope }
+        - { method: GET,  path: /healthz,               response: { status: ok } }
+      shutdown: graceful
+    stdio:
+      protocol: json-rpc 2.0 (newline-delimited)
+      lifecycle:
+        - read JSON
+        - validate & dispatch
+        - write JSON + flush
+      control: [ cancel, graceful_shutdown ]
+  shared_service:
+    class: <ServiceClassName>
+    methods: [ <methodA>, <methodB>, <methodC> ]
+    behavior:
+      - validate I/O against schemas
+      - deterministic seed (RAGX_SEED) + stable sorting
+  cli:
+    command: <cli_command>
+    flags: [ --http, --stdio, --once, --log-level ]
+
+# Optional class design (library code)
+classes_contract: # (optional)
+  language: python
+  classes:
+    - name: <ClassName>
+      responsibilities:
+        - <single-sentence responsibility>
+      methods:
+        - signature: def do_work(self, item: Item) -> Result
+          raises: [ ValueError ]
+          invariants: [ "idempotent", "pure" ]
+    - name: <OtherClass>
+      methods:
+        - signature: @classmethod def from_config(cls, cfg: dict) -> "OtherClass"
+
+interfaces_contract: # (optional)
+  protocols:
+    - name: <InterfaceName>
+      methods:
+        - name: fetch
+          params: [ url: str, timeout: float ]
+          returns: bytes
+
+cli_contract: # (optional)
+  program: <cli_command>
+  commands:
+    - name: build
+      flags:
+        - { name: --input, type: path, required: true }
+        - { name: --output, type: path, required: true }
+      exit_codes:
+        - { code: 0, meaning: "ok" }
+        - { code: 2, meaning: "invalid input" }
+
+schema_contract: # (optional)
+  draft: 2020-12
+  files:
+    - path: apps/schemas/<name>.schema.json
+      kind: input|output
+      required_fields: [ <fieldA>, <fieldB> ]
+
+toolpack_contract: # (optional)
+  manifests:
+    - apps/mcp_server/toolpacks/core/<name>.tool.yaml
+  deterministic: true
+
+datastore_contract: # (optional)
+  engine: sqlite|postgres
+  schemas:
+    - name: <table>
+      columns:
+        - { name: id, type: TEXT, pk: true }
+        - { name: created_at, type: TIMESTAMP }
+      indexes:
+        - { fields: [created_at], unique: false }
+  migrations_dir: db/migrations
+
+# Minimal logging contract so tests can assert structure (no metrics/tracing yet)
+structured_logging_contract: # (optional)
+  format: jsonl
+  storage_path_prefix: runs/<area>/<task>
+  latest_symlink: runs/<area>/<task>.latest.jsonl
+  retention: keep-last-5
+  event_fields: *log_event_fields
+  metadata_fields: [ runId, attemptId, schemaVersion, deterministic ]
+  volatile_fields: *volatile_fields
+
+log_diff_strategy: # (optional)
+  tool: deepdiff.DeepDiff
+  baseline_path: tests/fixtures/<area>/<task>_golden.jsonl
+  whitelist_fields: *volatile_fields
+  notes: >
+    Only establish the golden path & diff harness. Real data stability is enforced in Part B.
+
+artifacts:
+  tests:
+    unit:
+      - tests/unit/<module>/test_<topic>_spec.py
+      - tests/unit/<module>/test_<topic>_errors.py
+    integration:
+      - tests/integration/<topic>/test_round_trip_spec.py
+    property_based: []   # optional
+  fixtures:
+    - tests/fixtures/<area>/<task>_golden.jsonl
+    - tests/fixtures/<area>/<name>.json
+  stubs:
+    - src/<pkg>/<module>.py           # contains NotImplementedError stubs
+  schemas:
+    - apps/schemas/<name>.schema.json
+  docs:
+    - docs/<area>/<task>_spec.md
+
+test_plan:
+  unit:
+    - tests/unit/<module>/test_<topic>_spec.py
+  integration:
+    - tests/integration/<topic>/test_round_trip_spec.py
+  property_based:
+    - tests/property/test_<topic>_contracts.py  # optional
+  fixtures:
+    - tests/fixtures/<area>/<task>_golden.jsonl
+
+ci:
+  xfail_marker: "spec_xfail"     # tests marked with this are allowed to xfail (strict)
+  matrix:
+    python: [ "3.11" ]
+    os: [ "ubuntu-latest" ]
+  gates: [ lint, typecheck, unit, integration ]
+
+actions:
+  - stage: tests
+    summary: Author executable specs and fixtures; wire xfail where appropriate.
+  - stage: scaffold
+    summary: Create stubs, schemas, and CLI skeletons used by tests.
+    tasks:
+      - add NotImplementedError stubs
+      - add JSON Schemas and minimal manifests
+      - add basic CLI entry (no real behavior)
+
+acceptance:
+  - All new tests are collected and either xfail(strict=true) or pass against stubs.
+  - Lint/typecheck pass.
+  - Golden fixture files exist and validate shape (if logging/schema contracts are included).
