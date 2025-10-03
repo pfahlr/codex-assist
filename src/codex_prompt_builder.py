@@ -7,128 +7,121 @@ codex_template_builder.py
 -------------------------
 Render text files from Jinja2 templates using simple CLI parameters.
 
-Why this exists
-===============
-You often need to generate repeatable prompts/comments/scripts where most
-content is boilerplate and only a few variables change. This script lets you
-keep the boilerplate in a template and set values at render time.
+Array-safe, zsh-friendly additions:
+- --add KEY=VALUE                    # append VALUE to list KEY (VALUE may be '@file')
+- --add-file KEY=/path/glob*.txt     # append contents of each match to list KEY
+- --set-index KEY:2=VALUE            # set KEY[2] to VALUE (VALUE may be '@file')
+- --set-file-index KEY:2=/path.txt   # set KEY[2] from a single file
 
-Features
-========
-- Use --template-name to point to any Jinja2 template file.
-- Fill in scalar values with repeated:       --set KEY=VALUE
-- Build arrays with append:                  --set LIST[]=item
-- Or set by index:                           --set LIST[2]=item
-- Create nested objects via dot notation:    --set PARENT.CHILD=value
-- Inject raw JSON into the context:          --set-json KEY='["a","b"]'
-- Merge multiple --set / --set-json flags.
-- Optional: print the merged context for debugging.
-- Adds a 'zip' filter so you can iterate two arrays in parallel.
-  Example in your template:
-    {% for a, b in A|zip(B) %} ... {% endfor %}
-
-Requirements
-============
-  pip install Jinja2
-
-Examples
-========
-1) Scalars + arrays built from CLI:
-   python codex_template_builder.py \\
-     --template-name templates/codex_consolidate.tpl \\
-     --set OWNER=pfahlr --set REPO=ragx \\
-     --set TOKEN_ENVVAR=CODEX_READ_ALL_REPOSITORIES_TOKEN \\
-     --set BRANCHES[]=codex/fix-a --set BRANCHES[]=codex/fix-b \\
-     --set BUG_IDS[]=B1 --set BUG_TEXTS[]='First bug' \\
-     --set BUG_IDS[]=B2 --set BUG_TEXTS[]='Second bug' \\
-     --out prompt.txt
-
-2) JSON-friendly (clearer for complex data):
-   python codex_template_builder.py \\
-     --template-name templates/codex_consolidate.tpl \\
-     --set OWNER=pfahlr --set REPO=ragx \\
-     --set TOKEN_ENVVAR=CODEX_READ_ALL_REPOSITORIES_TOKEN \\
-     --set-json BRANCHES='["codex/fix-a","codex/fix-b"]' \\
-     --set-json BUGS='[{"id":"B1","text":"Bug one"},{"id":"B2","text":"Bug two"}]' \\
-     --out prompt.txt
+Existing (kept for compatibility):
+- --set KEY=VALUE                    # scalars; also supports '@file' shorthand
+- --set-file KEY=/path/or/glob       # 1 match -> scalar; many -> list
+- --set-json KEY=<json>
+- --set-json-file KEY=/path.json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+import glob
 from pathlib import Path
 from typing import Any, Dict, List
-
 
 # -----------------------------
 # Utilities
 # -----------------------------
 
 def die(msg: str, exit_code: int = 2) -> None:
-  """Print an error to stderr and exit."""
   sys.stderr.write(f"ERROR: {msg}\n")
   raise SystemExit(exit_code)
 
-
 def ensure_jinja2() -> None:
-  """Ensure Jinja2 is importable; explain how to install otherwise."""
   try:
     import jinja2  # type: ignore
   except Exception:
     die("Jinja2 is required. Install with: pip install Jinja2")
 
+def read_text_file(path_str: str) -> str:
+  p = Path(path_str)
+  if not p.exists():
+    die(f"File not found: {p}")
+  try:
+    return p.read_text(encoding="utf-8")
+  except Exception as e:
+    die(f"Failed to read text file '{p}': {e}")
+  return ""  # unreachable
 
-def deep_merge(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
-  """Recursively merge src into dst; returns dst for chaining."""
-  for k, v in src.items():
-    if k in dst and isinstance(dst[k], dict) and isinstance(v, dict):
-      deep_merge(dst[k], v)
-    else:
-      dst[k] = v
-  return dst
+def expand_path(pattern: str) -> str:
+  return os.path.expandvars(os.path.expanduser(pattern))
 
+def load_pattern_contents(pattern: str) -> List[str]:
+  pattern = expand_path(pattern)
+  matches = sorted(glob.glob(pattern, recursive=True))
+  if matches:
+    return [read_text_file(m) for m in matches]
+  # Treat as single file path when glob finds nothing
+  return [read_text_file(pattern)]
+
+def maybe_file_value(raw_value: str) -> str:
+  # '@@foo' -> '@foo' (escape)
+  if raw_value.startswith("@@"):
+    return raw_value[1:]
+  # '@path' -> load text
+  if raw_value.startswith("@"):
+    path = raw_value[1:]
+    if not path:
+      die("Empty path after '@' in value. Use @@ to escape a literal '@'.")
+    return read_text_file(expand_path(path))
+  return raw_value
 
 # -----------------------------
-# Parsing CLI key-value inputs
+# Nested/array helpers
 # -----------------------------
 
 _ARRAY_KEY_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\[(?P<index>\d*)\])?$")
+_COLON_INDEX_RE = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_.]*):(?P<index>\d+)$")
 
-
-def _set_nested(ctx: Dict[str, Any], dotted_key: str, value: Any) -> None:
-  """Set a value into a nested dict using dot notation in the key."""
-  parts = dotted_key.split(".")
+def _ensure_path_dict(ctx: Dict[str, Any], path_parts: List[str]) -> Dict[str, Any]:
   cur: Dict[str, Any] = ctx
-  for p in parts[:-1]:
+  for p in path_parts:
     if p not in cur or not isinstance(cur[p], dict):
       cur[p] = {}
     cur = cur[p]  # type: ignore[assignment]
-  cur[parts[-1]] = value
+  return cur
 
+def _set_nested(ctx: Dict[str, Any], dotted_key: str, value: Any) -> None:
+  parts = dotted_key.split(".")
+  parent = _ensure_path_dict(ctx, parts[:-1])
+  parent[parts[-1]] = value
 
-def parse_set_pairs(pairs: List[str]) -> Dict[str, Any]:
-  """Parse repeated --set KEY=VALUE parameters into a nested context dict.
+def _ensure_list_at(ctx: Dict[str, Any], dotted_key_wo_brackets: str) -> List[Any]:
+  parts = dotted_key_wo_brackets.split(".")
+  parent = _ensure_path_dict(ctx, parts[:-1])
+  key = parts[-1]
+  if key not in parent:
+    parent[key] = []
+  if not isinstance(parent[key], list):
+    die(f"Cannot assign list semantics to non-list key '{dotted_key_wo_brackets}'")
+  return parent[key]  # type: ignore[return-value]
 
-  Supports:
-    VAR=value                   -> ctx["VAR"] = "value"
-    LIST[]=item                 -> ctx["LIST"] = ["item", ...] (append)
-    LIST[2]=item                -> ctx["LIST"][2] = "item"  (auto-grows list)
-    NESTED.PATH=value           -> ctx["NESTED"]["PATH"] = "value"
-  """
-  ctx: Dict[str, Any] = {}
+# -----------------------------
+# Apply functions (mutate ctx)
+# -----------------------------
 
+def apply_set_pairs(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  # --set KEY=VALUE (supports KEY=@file, old KEY[]/KEY[2] forms)
   for pair in pairs or []:
     if "=" not in pair:
       die(f"--set expects KEY=VALUE, got: {pair}")
-    key, value = pair.split("=", 1)
+    key, raw_value = pair.split("=", 1)
+    value = maybe_file_value(raw_value)
 
-    # Support nesting via dots on the full key, but bracket array syntax only on the last segment
     parts = key.split(".")
     last = parts[-1]
-
     m = _ARRAY_KEY_RE.match(last)
     if not m:
       _set_nested(ctx, key, value)
@@ -136,46 +129,21 @@ def parse_set_pairs(pairs: List[str]) -> Dict[str, Any]:
 
     arr_name = m.group("name")
     idx = m.group("index")  # None, "" (append), or digits
-
     if idx is None:
-      # Plain scalar for this last segment
       _set_nested(ctx, key, value)
       continue
 
-    # We have bracket syntax; arrays live at the final segment without the brackets
-    arr_path = parts[:-1] + [arr_name]
-
-    # Navigate/create the dict path up to the list
-    cur: Dict[str, Any] = ctx
-    for p in arr_path[:-1]:
-      if p not in cur or not isinstance(cur[p], dict):
-        cur[p] = {}
-      cur = cur[p]  # type: ignore[assignment]
-
-    # Ensure the list exists
-    arr_key = arr_path[-1]
-    if arr_key not in cur:
-      cur[arr_key] = []
-    if not isinstance(cur[arr_key], list):
-      die(f"Cannot assign list semantics to non-list key '{arr_key}'")
-    lst: List[Any] = cur[arr_key]  # type: ignore[assignment]
-
+    arr_path = ".".join(parts[:-1] + [arr_name])
+    lst = _ensure_list_at(ctx, arr_path)
     if idx == "":
-      # Append: LIST[]=value
       lst.append(value)
     else:
-      # Explicit index: LIST[2]=value
       i = int(idx)
       if len(lst) <= i:
         lst.extend([None] * (i + 1 - len(lst)))
       lst[i] = value
 
-  return ctx
-
-
-def parse_set_json(pairs: List[str]) -> Dict[str, Any]:
-  """Parse repeated --set-json KEY=<json> parameters."""
-  ctx: Dict[str, Any] = {}
+def apply_set_json(ctx: Dict[str, Any], pairs: List[str]) -> None:
   for pair in pairs or []:
     if "=" not in pair:
       die(f"--set-json expects KEY=<json>, got: {pair}")
@@ -185,30 +153,128 @@ def parse_set_json(pairs: List[str]) -> Dict[str, Any]:
     except Exception as e:
       die(f"Invalid JSON for key '{key}': {e}")
     _set_nested(ctx, key, value)
-  return ctx
 
+def apply_set_file(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  # --set-file KEY=PATH_OR_GLOB
+  for pair in pairs or []:
+    if "=" not in pair:
+      die(f"--set-file expects KEY=/path, got: {pair}")
+    key, pattern = pair.split("=", 1)
+    contents = load_pattern_contents(pattern)
+
+    parts = key.split(".")
+    last = parts[-1]
+    m = _ARRAY_KEY_RE.match(last)
+    if not m:
+      # No array syntax. If multiple files matched, set list; else scalar.
+      _set_nested(ctx, key, contents[0] if len(contents) == 1 else contents)
+      continue
+
+    arr_name = m.group("name")
+    idx = m.group("index")  # None, "" (append), or digits
+    if idx is None:
+      _set_nested(ctx, key, contents[0] if len(contents) == 1 else contents)
+      continue
+
+    arr_path = ".".join(parts[:-1] + [arr_name])
+    lst = _ensure_list_at(ctx, arr_path)
+    if idx == "":
+      lst.extend(contents)
+    else:
+      if len(contents) != 1:
+        die(f"--set-file {key}=<glob> matched {len(contents)} files; expected exactly 1 for explicit index.")
+      i = int(idx)
+      if len(lst) <= i:
+        lst.extend([None] * (i + 1 - len(lst)))
+      lst[i] = contents[0]
+
+def apply_set_json_file(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  for pair in pairs or []:
+    if "=" not in pair:
+      die(f"--set-json-file expects KEY=/path/to/file.json, got: {pair}")
+    key, path_str = pair.split("=", 1)
+    raw = read_text_file(expand_path(path_str))
+    try:
+      value = json.loads(raw)
+    except Exception as e:
+      die(f"Invalid JSON in file for key '{key}': {e}")
+    _set_nested(ctx, key, value)
+
+# NEW: zsh-friendly array builders
+def apply_add(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  # --add KEY=VALUE  (append VALUE to list KEY; VALUE may be '@file')
+  for pair in pairs or []:
+    if "=" not in pair:
+      die(f"--add expects KEY=VALUE, got: {pair}")
+    key, raw_value = pair.split("=", 1)
+    value = maybe_file_value(raw_value)
+    lst = _ensure_list_at(ctx, key)
+    lst.append(value)
+
+def apply_add_file(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  # --add-file KEY=/path/glob   (append contents of each match to list KEY)
+  for pair in pairs or []:
+    if "=" not in pair:
+      die(f"--add-file expects KEY=/path, got: {pair}")
+    key, pattern = pair.split("=", 1)
+    contents = load_pattern_contents(pattern)
+    lst = _ensure_list_at(ctx, key)
+    lst.extend(contents)
+
+def apply_set_index(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  # --set-index KEY:2=VALUE     (VALUE may be '@file')
+  for pair in pairs or []:
+    if "=" not in pair:
+      die(f"--set-index expects KEY:INDEX=VALUE, got: {pair}")
+    key_part, raw_value = pair.split("=", 1)
+    m = _COLON_INDEX_RE.match(key_part)
+    if not m:
+      die(f"--set-index requires KEY:INDEX form, got: {key_part}")
+    base_key = m.group("name")    # may include dots for nesting
+    index = int(m.group("index"))
+    value = maybe_file_value(raw_value)
+    lst = _ensure_list_at(ctx, base_key)
+    if len(lst) <= index:
+      lst.extend([None] * (index + 1 - len(lst)))
+    lst[index] = value
+
+def apply_set_file_index(ctx: Dict[str, Any], pairs: List[str]) -> None:
+  # --set-file-index KEY:2=/path.txt  (exactly one file must match)
+  for pair in pairs or []:
+    if "=" not in pair:
+      die(f"--set-file-index expects KEY:INDEX=/path, got: {pair}")
+    key_part, pattern = pair.split("=", 1)
+    m = _COLON_INDEX_RE.match(key_part)
+    if not m:
+      die(f"--set-file-index requires KEY:INDEX form, got: {key_part}")
+    base_key = m.group("name")
+    index = int(m.group("index"))
+    contents = load_pattern_contents(pattern)
+    if len(contents) != 1:
+      die(f"--set-file-index {key_part}=<glob> matched {len(contents)} files; expected exactly 1.")
+    lst = _ensure_list_at(ctx, base_key)
+    if len(lst) <= index:
+      lst.extend([None] * (index + 1 - len(lst)))
+    lst[index] = contents[0]
 
 # -----------------------------
 # Rendering
 # -----------------------------
 
 def render_template(template_path: Path, context: Dict[str, Any]) -> str:
-  """Render a Jinja2 template with the provided context."""
   ensure_jinja2()
-  import jinja2  # imported late so help text prints fast without Jinja2 installed
+  import jinja2  # type: ignore
 
   env = jinja2.Environment(
     autoescape=False,
     trim_blocks=True,
     lstrip_blocks=True,
   )
-  # Helpful filter: zip two lists together for parallel iteration
   env.filters['zip'] = lambda a, b: list(zip(a or [], b or []))
 
   source = template_path.read_text(encoding="utf-8")
   template = env.from_string(source)
   return template.render(**context)
-
 
 # -----------------------------
 # CLI
@@ -216,24 +282,41 @@ def render_template(template_path: Path, context: Dict[str, Any]) -> str:
 
 def build_argparser() -> argparse.ArgumentParser:
   p = argparse.ArgumentParser(
-    description="Render a Jinja2 template with values from --set / --set-json.",
+    description="Render a Jinja2 template with values from CLI flags (zsh-friendly array builders included).",
     formatter_class=argparse.RawTextHelpFormatter,
   )
   p.add_argument("--template-name", required=True, help="Path to the Jinja2 template file.")
-  p.add_argument("--set", action="append", default=[], help="KEY=VALUE (arrays: LIST[]=v, LIST[2]=v; nesting: A.B=v). Repeatable.")
+  # Scalars / JSON
+  p.add_argument("--set", action="append", default=[], help="KEY=VALUE (nest with A.B=value). '@path' loads file text. Repeatable.")
   p.add_argument("--set-json", action="append", default=[], help="KEY=<json>. Repeatable.")
-  p.add_argument("--out", help="Write the rendered output to this file (otherwise print to stdout)." )
+  p.add_argument("--set-json-file", action="append", default=[], help="KEY=/path/to/file.json (reads and parses JSON). Repeatable.")
+  # Files (scalar or list via glob)
+  p.add_argument("--set-file", action="append", default=[], help="KEY=/path/or/glob. 1 match -> scalar; many -> list. Repeatable.")
+  # NEW: zsh-friendly array ops
+  p.add_argument("--add", action="append", default=[], help="KEY=VALUE. Append VALUE (or '@file') to list KEY. Repeatable.")
+  p.add_argument("--add-file", action="append", default=[], help="KEY=/path/or/glob. Append contents of matches to list KEY. Repeatable.")
+  p.add_argument("--set-index", action="append", default=[], help="KEY:INDEX=VALUE. Set list element at INDEX. VALUE may be '@file'. Repeatable.")
+  p.add_argument("--set-file-index", action="append", default=[], help="KEY:INDEX=/path. Set list element from file (exactly one match). Repeatable.")
+  # Output / debug
+  p.add_argument("--out", help="Write the rendered output to this file (otherwise print to stdout).")
   p.add_argument("--print-context", action="store_true", help="Print the merged context (JSON) to stderr for debugging.")
   return p
-
 
 def main() -> None:
   args = build_argparser().parse_args()
 
-  # Build context from sets
   ctx: Dict[str, Any] = {}
-  deep_merge(ctx, parse_set_pairs(args.set))
-  deep_merge(ctx, parse_set_json(args.set_json))
+  # Order matters: later flags can override earlier ones if they set scalars,
+  # while appends always extend lists.
+  apply_set_pairs(ctx, args.set)
+  apply_set_file(ctx, args.set_file)
+  apply_set_json(ctx, args.set_json)
+  apply_set_json_file(ctx, args.set_json_file)
+  # zsh-friendly array builders
+  apply_add(ctx, args.add)
+  apply_add_file(ctx, args.add_file)
+  apply_set_index(ctx, args.set_index)
+  apply_set_file_index(ctx, args.set_file_index)
 
   if args.print_context:
     sys.stderr.write(json.dumps(ctx, indent=2, ensure_ascii=False) + "\n")
@@ -248,7 +331,6 @@ def main() -> None:
     Path(args.out).write_text(rendered, encoding="utf-8")
   else:
     sys.stdout.write(rendered)
-
 
 if __name__ == "__main__":
   main()
