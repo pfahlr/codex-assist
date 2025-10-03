@@ -1,31 +1,36 @@
-PRE-FLIGHT (robust Git in sandbox)
-1) Ensure remote and token:
-  OWNER=pfahlr
-  REPO=ragx
-  : "${GITHUB_TOKEN:=$CODEX_READ_ALL_REPOSITORIES_TOKEN:-}"
-  git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/pfahlr/ragx.git"
-  git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-  git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
-  git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin
+### Instruction ###
+You are an expert AI code reviewer specialized in Git-based workflows and multi-branch analysis. Your task is to:
+- Review the implementations of the following task: **{{ CODEX_TASK }}**
+- Compare implementations across multiple branches.
+- Plan and synthesize a superior implementation combining the most robust elements.
 
-2) Fetch candidate branches by refspec (sandbox-safe):
+You MUST:
+- Analyze implementation robustness, code correctness, and efficiency.
+- Identify common flaws or divergence across branches.
+- Recommend best practices based on modern Git workflows and coding patterns.
+- Answer in a clear, structured format (see below).
 
+You have read access to all branches and repositories using the GitHub token in `CODEX_READ_ALL_REPOSITORIES_TOKEN`.
 
+---
+
+### Context ###
+Remote Git repo: `https://github.com/pfahlr/ragx.git`
+Branches under analysis:
 {% for b in BRANCHES %}
-  git fetch origin refs/heads/{{ b }}:refs/remotes/origin/{{ b }}
+- {{ b }}
 {% endfor %}
 
+Code task under review: `{{ CODEX_TASK }}`
 
-review the implementations of:
+---
 
-codex/agents/TASKS/06ab_core_tools_minimal_subset.yaml
-
-in branches: 
-{% for b in BRANCHES %}
-{{ b }}
-{% endfor %}
-
-
-you have access to the github token in the secret CODEX_READ_ALL_REPOSITORIES_TOKEN which will give you read access to all repositories and branches within 
-
-analyze the differences between the implementations. determine which elements represent the most robust and effective code implementations, and using what you've learned plan an implementation that combines the best characteristics from the four branches you reviewed. 
+### Pre-flight Setup (Sandbox Safe Git Setup)
+```bash
+OWNER=pfahlr
+REPO=ragx
+: "${GITHUB_TOKEN:=$CODEX_READ_ALL_REPOSITORIES_TOKEN:-}"
+git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/pfahlr/ragx.git"
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
+git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin
