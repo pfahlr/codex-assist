@@ -18,6 +18,15 @@ Existing (kept for compatibility):
 - --set-file KEY=/path/or/glob       # 1 match -> scalar; many -> list
 - --set-json KEY=<json>
 - --set-json-file KEY=/path.json
+
+Includes & template helpers:
+- Native Jinja includes: {% include "partials/foo.tpl" %}
+- Raw file helpers in templates:
+    {{ include_text("docs/intro.md") }}
+    {{ read_file("snippets/step.txt") }}                 # alias of include_text
+    {{ include_text_glob("notes/*.md", sep="\n\n") }}
+    {% for p in glob_paths("snips/*.md") %}{{ include_text(p) }}{% endfor %}
+    {{ read_json("data/spec.json").title }}
 """
 
 from __future__ import annotations
@@ -29,7 +38,7 @@ import re
 import sys
 import glob
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 # -----------------------------
 # Utilities
@@ -45,8 +54,11 @@ def ensure_jinja2() -> None:
   except Exception:
     die("Jinja2 is required. Install with: pip install Jinja2")
 
+def expand_path(pattern: str) -> str:
+  return os.path.expandvars(os.path.expanduser(pattern))
+
 def read_text_file(path_str: str) -> str:
-  p = Path(path_str)
+  p = Path(expand_path(path_str))
   if not p.exists():
     die(f"File not found: {p}")
   try:
@@ -54,9 +66,6 @@ def read_text_file(path_str: str) -> str:
   except Exception as e:
     die(f"Failed to read text file '{p}': {e}")
   return ""  # unreachable
-
-def expand_path(pattern: str) -> str:
-  return os.path.expandvars(os.path.expanduser(pattern))
 
 def load_pattern_contents(pattern: str) -> List[str]:
   pattern = expand_path(pattern)
@@ -258,22 +267,102 @@ def apply_set_file_index(ctx: Dict[str, Any], pairs: List[str]) -> None:
     lst[index] = contents[0]
 
 # -----------------------------
-# Rendering
+# Include helpers for templates
 # -----------------------------
 
-def render_template(template_path: Path, context: Dict[str, Any]) -> str:
+def _dedupe_keep_order(items: Sequence[str]) -> List[str]:
+  seen = set()
+  out: List[str] = []
+  for it in items:
+    if it not in seen:
+      seen.add(it)
+      out.append(it)
+  return out
+
+def _resolve_path_for_include(base_dirs: List[str], path_str: str) -> Path:
+  p = Path(expand_path(path_str))
+  if p.is_absolute() and p.exists():
+    return p
+  if p.exists():
+    return p
+  for base in base_dirs:
+    cand = Path(base) / path_str
+    if cand.exists():
+      return cand
+  die(f"Include path not found: {path_str} (searched: {', '.join(base_dirs)})")
+  return p  # unreachable
+
+def _make_include_helpers(base_dirs: List[str]):
+  def include_text(path: str) -> str:
+    p = _resolve_path_for_include(base_dirs, path)
+    return p.read_text(encoding="utf-8")
+
+  def read_file(path: str) -> str:
+    return include_text(path)
+
+  def include_text_glob(pattern: str, sep: str = "\n") -> str:
+    pat = expand_path(pattern)
+    matches = sorted(glob.glob(pat, recursive=True))
+    if not matches:
+      for base in base_dirs:
+        matches = sorted(glob.glob(str(Path(base) / pattern), recursive=True))
+        if matches:
+          break
+    if not matches:
+      die(f"include_text_glob found no matches for pattern: {pattern}")
+    return sep.join(Path(m).read_text(encoding="utf-8") for m in matches)
+
+  def glob_paths(pattern: str) -> List[str]:
+    pat = expand_path(pattern)
+    matches = sorted(glob.glob(pat, recursive=True))
+    if not matches:
+      all_matches: List[str] = []
+      for base in base_dirs:
+        all_matches.extend(glob.glob(str(Path(base) / pattern), recursive=True))
+      matches = sorted(set(all_matches))
+    return matches
+
+  def read_json(path: str) -> Any:
+    p = _resolve_path_for_include(base_dirs, path)
+    try:
+      return json.loads(p.read_text(encoding="utf-8"))
+    except Exception as e:
+      die(f"Failed to parse JSON include '{path}': {e}")
+    return None  # unreachable
+
+  return include_text, read_file, include_text_glob, glob_paths, read_json
+
+# -----------------------------
+# Rendering (loader + helpers)
+# -----------------------------
+
+def render_template(template_path: Path, context: Dict[str, Any], extra_search: List[str]) -> str:
   ensure_jinja2()
   import jinja2  # type: ignore
+  from jinja2 import FileSystemLoader, ChoiceLoader
 
+  base_dir = str(template_path.parent.resolve())
+  search_paths = _dedupe_keep_order([base_dir] + [str(Path(p).resolve()) for p in extra_search] + [os.getcwd()])
+
+  loader = ChoiceLoader([FileSystemLoader(search_paths)])
   env = jinja2.Environment(
+    loader=loader,
     autoescape=False,
     trim_blocks=True,
     lstrip_blocks=True,
   )
   env.filters['zip'] = lambda a, b: list(zip(a or [], b or []))
 
-  source = template_path.read_text(encoding="utf-8")
-  template = env.from_string(source)
+  include_text, read_file, include_text_glob, glob_paths, read_json = _make_include_helpers(search_paths)
+  env.globals.update({
+    'include_text': include_text,
+    'read_file': read_file,
+    'include_text_glob': include_text_glob,
+    'glob_paths': glob_paths,
+    'read_json': read_json,
+  })
+
+  template = env.get_template(template_path.name)
   return template.render(**context)
 
 # -----------------------------
@@ -282,17 +371,18 @@ def render_template(template_path: Path, context: Dict[str, Any]) -> str:
 
 def build_argparser() -> argparse.ArgumentParser:
   p = argparse.ArgumentParser(
-    description="Render a Jinja2 template with values from CLI flags (zsh-friendly array builders included).",
+    description="Render a Jinja2 template with values from CLI flags (zsh-friendly array builders + includes).",
     formatter_class=argparse.RawTextHelpFormatter,
   )
   p.add_argument("--template-name", required=True, help="Path to the Jinja2 template file.")
+  p.add_argument("--template-search", action="append", default=[], help="Additional template/include search paths. Repeatable.")
   # Scalars / JSON
   p.add_argument("--set", action="append", default=[], help="KEY=VALUE (nest with A.B=value). '@path' loads file text. Repeatable.")
   p.add_argument("--set-json", action="append", default=[], help="KEY=<json>. Repeatable.")
   p.add_argument("--set-json-file", action="append", default=[], help="KEY=/path/to/file.json (reads and parses JSON). Repeatable.")
   # Files (scalar or list via glob)
   p.add_argument("--set-file", action="append", default=[], help="KEY=/path/or/glob. 1 match -> scalar; many -> list. Repeatable.")
-  # NEW: zsh-friendly array ops
+  # zsh-friendly array ops
   p.add_argument("--add", action="append", default=[], help="KEY=VALUE. Append VALUE (or '@file') to list KEY. Repeatable.")
   p.add_argument("--add-file", action="append", default=[], help="KEY=/path/or/glob. Append contents of matches to list KEY. Repeatable.")
   p.add_argument("--set-index", action="append", default=[], help="KEY:INDEX=VALUE. Set list element at INDEX. VALUE may be '@file'. Repeatable.")
@@ -325,7 +415,7 @@ def main() -> None:
   if not tpl_path.exists():
     die(f"Template not found: {tpl_path}")
 
-  rendered = render_template(tpl_path, ctx)
+  rendered = render_template(tpl_path, ctx, args.template_search)
 
   if args.out:
     Path(args.out).write_text(rendered, encoding="utf-8")
