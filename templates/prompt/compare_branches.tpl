@@ -41,20 +41,12 @@ git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin
 
 ### Output (strict) ###
-Return a single YAML document (no prose, no code fences). Do NOT copy any part of the template.
+Create a yaml document at 'codex/agents/TASKS/TEMPORARY_CODEX_TASK.yaml`
 Replace all `<…>` placeholders with concrete values; no angle brackets may remain.
 Pick one option where alternatives exist. Remove irrelevant optional sections.
 Set metadata.last_updated to today’s date (YYYY-MM-DD).
 If Git access fails, still produce a best-effort plan and add an “assumptions:” list.
 
-Before returning, self-check:
-- Parses as YAML
-- Contains no `<` or `>`
-- No “optional” notes or alternation bars remain
-- Paths/ids match this task
-- Output must not contain triple backticks
-- Fail the run if any < or > remain.
-- If any section is unknown, use a concrete but honest value (e.g., risk: medium, or assumptions:) rather than leaving placeholders
 
 
 # Schema reference (do not copy; use only to shape your output):
