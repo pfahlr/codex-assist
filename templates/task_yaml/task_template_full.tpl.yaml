@@ -1,27 +1,37 @@
-version: <number>
-id: <task_id>
-title: <string>
+# =============================================================================
+# RAGX TASK SPEC TEMPLATE (GUIDED / REPLACE-ME)
+# -----------------------------------------------------------------------------
+# RULES:
+# - Replace every <…> placeholder with a concrete value. No angle brackets may remain.
+# - Choose ONE where alternatives are shown (e.g., manual|label-gated) and delete the other.
+# - Delete optional sections that don't apply to this task type.
+# - Do NOT change: metadata.owners: ["pfahlr@gmail.com"]
+# =============================================================================
+
+version: <number>            # e.g., 1
+id: <task_id>                # e.g., "06c_mcp_envelope_and_schema_validation"
+title: <string>              # e.g., "MCP Envelope and Schema Validation"
 summary: >
-  <high-level summary of the overall effort>
+  <high-level summary of the overall effort (1–3 lines)>
 
 description: >
-  <narrative describing goals, constraints, success criteria, and context>
+  <narrative describing goals, constraints, success criteria, and context (4–10 lines)>
 
 metadata:
-  owners: [ "you@example.com" ]
-  labels: [ "tests-first", "impl", "observability", "mcp" ]
-  priority: P1            # P0..P3
-  risk: medium            # low/medium/high
+  owners: [ "pfahlr@gmail.com" ]     # DO NOT CHANGE
+  labels: [ "<label-1>", "<label-2>", "<label-3>" ]  # e.g., "tests-first", "impl", "observability", "mcp"
+  priority: <P0|P1|P2|P3>
+  risk: <low|medium|high>
   last_updated: "<YYYY-MM-DD>"
   links:
-    - { type: "design_doc", url: "<url>" }
-    - { type: "tracking_issue", url: "<url>" }
-  tickets: [ "<JIRA-1234>" ]
+    - { type: "design_doc",    url: "<url>" }
+    - { type: "tracking_issue", url: "<url>" }   # delete if not applicable
+  tickets: [ "<JIRA-1234>" ]                     # or []
 
 strategy:
-  tests_first: true       # keep true to generate tests/specs before implementation
-  deterministic: true     # enforce seeds/sorting for fixtures
-  golden_management: manual|label-gated
+  tests_first: true
+  deterministic: true
+  golden_management: <manual|label-gated>
 
 scope:
   goals:
@@ -33,18 +43,18 @@ scope:
 assumptions:
   - <assumption 1>
 constraints:
-  - <constraint 1, e.g., "camelCase keys on disk", "Draft 2020-12">
+  - <constraint 1>            # e.g., "camelCase keys on disk", "JSON Schema Draft 2020-12"
 
-component_ids: [ <string>, <string> ]
-depends_on: [ <string>, <string> ]
-arg_spec: [ <string>, <string> ]
+component_ids: [ "<component-1>", "<component-2>" ]
+depends_on:   [ "<task-or-comp-1>", "<task-or-comp-2>" ]
+arg_spec:     [ "<arg-1>", "<arg-2>" ]           # delete if N/A
 
 config_flags:
-  - { name: "--host", env: "MCP_HOST", default: "0.0.0.0", type: "str",  desc: "HTTP bind host" }
-  - { name: "--port", env: "MCP_PORT", default: 8070,      type: "int",  desc: "HTTP bind port" }
-  - { name: "--once", env: null,       default: false,     type: "bool", desc: "Serve one request then exit (deterministic)" }
-  - { name: "--deterministic-ids", env: "MCP_DETERMINISTIC_IDS", default: false, type: "bool", desc: "UUID5 requestId for goldens" }
-  - { name: "--log-level", env: "MCP_LOG_LEVEL", default: "info", type: "str", desc: "Log verbosity" }
+  - { name: "--host",               env: "MCP_HOST",               default: "0.0.0.0", type: "str",  desc: "HTTP bind host" }
+  - { name: "--port",               env: "MCP_PORT",               default: 8070,      type: "int",  desc: "HTTP bind port" }
+  - { name: "--once",               env: null,                     default: false,     type: "bool", desc: "Serve one request then exit (deterministic)" }
+  - { name: "--deterministic-ids",  env: "MCP_DETERMINISTIC_IDS",  default: false,     type: "bool", desc: "UUID5 requestId for goldens" }
+  - { name: "--log-level",          env: "MCP_LOG_LEVEL",          default: "info",    type: "str",  desc: "Log verbosity" }
 
 observability_requirements:
   - Emit structured JSONL logs with required fields and flush-on-write.
@@ -76,7 +86,7 @@ x-python-matrix: &python_matrix [ "3.11", "3.12" ]
 x-os-matrix: &os_matrix [ "ubuntu-latest" ]
 # ------------------------------------------
 
-# ===== Optional, include only the sections relevant to this task type =====
+# ===== Optional sections (DELETE if not relevant) =====
 
 server_contract:  # (optional)
   transports:
@@ -96,14 +106,14 @@ server_contract:  # (optional)
         - write JSON to stdout; flush per message
       control: [ cancel, graceful_shutdown ]
   shared_service:
-    class: <ServiceClassName>
+    class: <ServiceClassName>                  # e.g., "MCPService"
     methods: [ discover, get_prompt, invoke_tool, health ]
     behavior:
       - validate inputs/outputs against schemas
       - deterministic seed (RAGX_SEED) + stable sorting
       - return envelope with ok|error and trace/span ids
   cli:
-    command: <cli_command>
+    command: <cli_command>                     # e.g., "mcp-server"
     flags: [ --http, --stdio, --host, --port, --once, --deterministic-ids, --log-level ]
 
 classes_contract:  # (optional)
@@ -142,7 +152,7 @@ schema_contract:  # (optional)
   draft: 2020-12
   files:
     - path: apps/schemas/<name>.schema.json
-      kind: input|output
+      kind: <input|output>
       required_fields: [ <fieldA>, <fieldB> ]
 
 toolpack_contract:  # (optional)
@@ -151,7 +161,7 @@ toolpack_contract:  # (optional)
   deterministic: true
 
 datastore_contract:  # (optional)
-  engine: sqlite|postgres
+  engine: <sqlite|postgres>
   schemas:
     - name: <table>
       columns:
@@ -205,7 +215,7 @@ log_diff_strategy:  # (optional)
   compatibility_symlink: tests/fixtures/<area>/logs/<task>_golden.jsonl
   whitelist_fields: *volatile_fields
   notes: >
-    Ignore volatile identifiers/timings; assert structure and event order.
+    <policy for diffing logs and ignoring volatile fields>
 
 artifacts:
   schemas:
@@ -249,72 +259,75 @@ test_plan:
     - tests/fixtures/<area>/<task>_golden.jsonl
 
 ci:
-  xfail_marker: "spec_xfail"           # set on new tests until impl lands
+  xfail_marker: "<marker-name>"                 # e.g., "spec_xfail"
   workflows:
-    - name: ci
+    - name: <workflow-name>                     # e.g., "ci"
       gates: *ci_gates
-      artifacts: [ "runs/**.jsonl", "apps/**/schemas/**.json" ]
-      cache_dependency_paths: [ "requirements*.txt" ]
+      artifacts: [ "<glob-1>", "<glob-2>" ]     # e.g., "runs/**.jsonl", "apps/**/schemas/**.json"
+      cache_dependency_paths: [ "<path-1>", "<path-2>" ]  # e.g., "requirements*.txt"
+
+# ===== Everything below is now explicitly REPLACE-ME demo text =====
 
 actions:
-  - stage: tests
-    summary: Author executable specs and fixtures (tests-first).
+  - stage: <stage-name-1>                       # e.g., "tests"
+    summary: <stage-summary-1>                  # e.g., "Author executable specs and fixtures (tests-first)."
     tasks:
-      - add NotImplementedError stubs matching contracts
-      - add JSON Schemas and minimal manifests
-      - add CLI skeletons without business logic
-  - stage: implementation
-    summary: Replace stubs with production logic; satisfy all specs.
+      - <task-item-1>                           # e.g., "add NotImplementedError stubs matching contracts"
+      - <task-item-2>                           # e.g., "add JSON Schemas and minimal manifests"
+      - <task-item-3>                           # e.g., "add CLI skeletons without business logic"
+  - stage: <stage-name-2>                       # e.g., "implementation"
+    summary: <stage-summary-2>
     tasks:
-      - implement classes/interfaces/CLI per contracts
-      - integrate schemas/toolpacks/datastore
-      - ensure deterministic behavior (RAGX_SEED, stable sorting)
-  - stage: observability
-    summary: Logging/metrics/tracing as applicable.
+      - <task-item-1>                           # e.g., "implement classes/interfaces/CLI per contracts"
+      - <task-item-2>                           # e.g., "integrate schemas/toolpacks/datastore"
+      - <task-item-3>                           # e.g., "ensure deterministic behavior (RAGX_SEED, stable sorting)"
+  - stage: <stage-name-3>                       # e.g., "observability"
+    summary: <stage-summary-3>
     tasks:
-      - emit JSONL logs and validate schema
-      - expose /metrics and propagate spans
-      - enforce PII redaction
-  - stage: hardening
-    summary: Security, limits, resilience, and performance tuning.
+      - <task-item-1>                           # e.g., "emit JSONL logs and validate schema"
+      - <task-item-2>                           # e.g., "expose /metrics and propagate spans"
+      - <task-item-3>                           # e.g., "enforce PII redaction"
+  - stage: <stage-name-4>                       # e.g., "hardening"
+    summary: <stage-summary-4>
     tasks:
-      - add authn/z, input caps, timeouts, retries/backoff
-      - add circuit breaker/backpressure if needed
-      - switch to fast JSON codec; cache hot paths
+      - <task-item-1>                           # e.g., "add authn/z, input caps, timeouts, retries/backoff"
+      - <task-item-2>                           # e.g., "add circuit breaker/backpressure if needed"
+      - <task-item-3>                           # e.g., "switch to fast JSON codec; cache hot paths"
 
 rollout_plan:
   phases:
-    - name: dev
-      exit_criteria: [ "unit+integration green", "golden diff green" ]
-    - name: staging
-      exit_criteria: [ "metrics stable 24h", "no PII in logs" ]
-    - name: prod
-      exit_criteria: [ "SLOs met 7d", "no error spikes" ]
+    - name: <phase-name-1>                      # e.g., "dev"
+      exit_criteria: [ "<criterion-1>", "<criterion-2>" ]
+    - name: <phase-name-2>                      # e.g., "staging"
+      exit_criteria: [ "<criterion-1>", "<criterion-2>" ]
+    - name: <phase-name-3>                      # e.g., "prod"
+      exit_criteria: [ "<criterion-1>", "<criterion-2>" ]
 
 rollback_strategy:
   steps:
-    - revert deploy to previous artifact
-    - restore previous golden if schema reversion occurred
-    - invalidate caches and restart
+    - <step-1>
+    - <step-2>
+    - <step-3>
 
 operational_runbooks:
-  - name: golden_diff_failed
+  - name: <runbook-name-1>                      # e.g., "golden_diff_failed"
     steps:
-      - verify flags (RAGX_SEED, --deterministic-ids, --once)
-      - if intended change, run guarded --update-golden and open PR
-  - name: elevated_error_rate
+      - <step-1>                                # e.g., "verify flags (RAGX_SEED, --deterministic-ids, --once)"
+      - <step-2>                                # e.g., "if intended change, run guarded --update-golden and open PR"
+  - name: <runbook-name-2>                      # e.g., "elevated_error_rate"
     steps:
-      - check rate limits/circuit breaker and recent deploys
-      - inspect /metrics and traces; roll back if needed
+      - <step-1>                                # e.g., "check rate limits/circuit breaker and recent deploys"
+      - <step-2>                                # e.g., "inspect /metrics and traces; roll back if needed"
 
 maintenance:
   deprecation_policy: >
-    Provide 1 minor version with dual-writing logs before changing logging schema.
+    <policy statement>                          # e.g., "Provide 1 minor version with dual-writing logs before changing logging schema."
   upgrade_notes:
-    - <operator notes>
+    - <operator-note-1>                         # e.g., "Requires new env var XYZ"
+    - <operator-note-2>
 
 acceptance:
-  - All tests pass; no xfail markers remain for this task.
-  - Logs validate against schema; DeepDiff passes with whitelist (if enabled).
-  - Rotation keeps ≤5 files; latest symlink updated.
-  - Documentation updated (spec + impl + ops notes).
+  - <acceptance-criterion-1>                    # e.g., "All tests pass; no xfail markers remain for this task."
+  - <acceptance-criterion-2>                    # e.g., "Logs validate against schema; DeepDiff passes with whitelist."
+  - <acceptance-criterion-3>                    # e.g., "Rotation keeps ≤5 files; latest symlink updated."
+  - <acceptance-criterion-4>                    # e.g., "Documentation updated (spec + impl + ops notes)."

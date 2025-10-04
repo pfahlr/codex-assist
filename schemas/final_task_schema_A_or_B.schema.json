@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    { "$ref": "final_task_schema_part_A.schema.json" },
+    { "$ref": "final_task_schema_part_B.schema.json" }
+  ]
+}
