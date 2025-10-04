@@ -11,9 +11,10 @@ from .context_ops import (
 from .structload import load_structured_glob
 from .template_env import render_template
 
-EXTENDED_HELP = r"""
-[Extended help truncated here for brevity in this file—use your previous EXTENDED_HELP text verbatim.]
-"""
+with file.open('./docs/codex_prompt_builder.cli.help.md', 'r') as f:
+  extended_help_text = f.read_file()
+
+EXTENDED_HELP = extended_help_text
 
 def build_argparser() -> argparse.ArgumentParser:
   p = argparse.ArgumentParser(
@@ -80,7 +81,7 @@ def main() -> None:
   cfg_path = find_config_path(args.config)
   if cfg_path:
     cfg = load_config(cfg_path)
-    merge_config_into_args(args, cfg)
+    merge_config_into_args(args, cfg, base_dir=cfg_path.parent)
 
   # Build context
   ctx: Dict[str, Any] = {}

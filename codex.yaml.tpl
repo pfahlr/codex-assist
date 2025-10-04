@@ -4,6 +4,8 @@ template_search:
   - shared/partials
 
 # Load structured docs (merged into root context in order)
+# Add additional configutation values here, items
+# further down the list override values higher in list
 load:
   - config/base.yaml
   - config/branch.json

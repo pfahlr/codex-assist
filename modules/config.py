@@ -51,12 +51,26 @@ def env_tpl_paths() -> List[str]:
   sep = ";" if os.name == "nt" else ":"
   return [p for p in val.split(sep) if p]
 
-def merge_config_into_args(args_ns, cfg: Dict[str, Any]) -> None:
+def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None:
   """
   Mutates argparse namespace by filling defaults from config.
   CLI flags (if provided) already have values; we only extend defaults.
   """
   # List-like flags we may extend if not provided on CLI
+  def _join_if_relative(p: str) -> str:
+    p = expand_path(p)
+    return p if os.path.isabs(p) else str((base_dir / p).resolve())
+
+  def _rewrite_pairs_rhs(pairs: List[str]) -> List[str]:
+    out: List[str] = []
+    for pair in pairs:
+      if "=" not in pair:
+        die(f"Invalid pair (missing '='): {pair}")
+      k, v = pair.split("=", 1)
+      out.append(f"{k}={_join_if_relative(v)}")
+    return out
+
+  # flags to fill from config when CLI didn't supply them
   for key, dest in [
     ("template_search", "template_search"),
     ("load", "load"),
@@ -73,20 +87,31 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any]) -> None:
     if key in cfg and getattr(args_ns, dest, None) == []:
       val = cfg[key]
       if isinstance(val, list):
-        setattr(args_ns, dest, list(val))
-      elif isinstance(val, dict) and dest == "load_into":
+        # path-normalize where appropriate
+        if dest in ("template_search", "load"):
+          setattr(args_ns, dest, [_join_if_relative(x) for x in val])
+        elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
+          setattr(args_ns, dest, _rewrite_pairs_rhs(list(val)))
+        else:
+          setattr(args_ns, dest, list(val))
+        elif isinstance(val, dict) and dest == "load_into":
         # convert mapping to KEY=PATH_OR_GLOB pairs
         pairs = []
         for k, v in val.items():
           if isinstance(v, list):
-            pairs += [f"{k}={item}" for item in v]
+            pairs += [f"{k}={_join_if_relative(item)}" for item in v]
           else:
-            pairs.append(f"{k}={v}")
+            pairs.append(f"{k}={_join_if_relative(v)}")
         setattr(args_ns, dest, pairs)
       else:
         # single -> list
-        setattr(args_ns, dest, [val])
-
+        if dest in ("template_search", "load"):
+          setattr(args_ns, dest, [_join_if_relative(val)])
+        elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
+          setattr(args_ns, dest, _rewrite_pairs_rhs([val] if isinstance(val, str) else list(val)))
+        else:
+          setattr(args_ns, dest, [val])
+          
   # Optional default output path
   if "out" in cfg and getattr(args_ns, "out", None) in (None, ""):
     setattr(args_ns, "out", cfg["out"])
