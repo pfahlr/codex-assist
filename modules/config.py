@@ -1,11 +1,14 @@
 from __future__ import annotations
-import os, json
+
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from .utils import die, expand_path, deep_merge
+
+from .utils import die, expand_path
 from .structload import load_structured_file
 
 LOCAL_NAMES = ["codex.yaml", "codex.yml", "codex.json"]
+
 
 def _user_config_candidates() -> List[Path]:
   home = Path.home()
@@ -23,19 +26,24 @@ def _user_config_candidates() -> List[Path]:
                    for n in ["config.yaml","config.yml","config.json"]]
   return candidates
 
+
 def find_config_path(explicit: Optional[str]) -> Optional[Path]:
   if explicit:
-    p = Path(expand_path(explicit))
-    if p.exists(): return p
+    p = Path(expand_path(explicit)).resolve()
+    if p.exists():
+      return p
     die(f"--config path not found: {p}")
   # local first
   for name in LOCAL_NAMES:
-    p = Path(name)
-    if p.exists(): return p
+    p = (Path(name)).resolve()
+    if p.exists():
+      return p
   # user-level
   for p in _user_config_candidates():
-    if p.exists(): return p
+    if p.exists():
+      return p.resolve()
   return None
+
 
 def load_config(path: Path) -> Dict[str, Any]:
   docs = load_structured_file(str(path))
@@ -44,22 +52,26 @@ def load_config(path: Path) -> Dict[str, Any]:
     die(f"Config must be a mapping at top level: {path}")
   return doc
 
+
 def env_tpl_paths() -> List[str]:
   # optional, lowest precedence
   val = os.getenv("CODEX_TPL_PATH")
-  if not val: return []
+  if not val:
+    return []
   sep = ";" if os.name == "nt" else ":"
   return [p for p in val.split(sep) if p]
 
+
 def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None:
-  """
-  Mutates argparse namespace by filling defaults from config.
+  """Mutate argparse namespace by filling defaults from config.
   CLI flags (if provided) already have values; we only extend defaults.
+  Paths in the config are resolved relative to the config file directory.
   """
-  # List-like flags we may extend if not provided on CLI
+  import os as _os
+
   def _join_if_relative(p: str) -> str:
     p = expand_path(p)
-    return p if os.path.isabs(p) else str((base_dir / p).resolve())
+    return p if _os.path.isabs(p) else str((base_dir / p).resolve())
 
   def _rewrite_pairs_rhs(pairs: List[str]) -> List[str]:
     out: List[str] = []
@@ -69,6 +81,14 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
       k, v = pair.split("=", 1)
       out.append(f"{k}={_join_if_relative(v)}")
     return out
+
+  def _strip_index_prefix(s: str) -> str:
+    if "=" not in s:
+      return s
+    parts = s.split("=")
+    if parts and parts[0].isdigit():
+      return "=".join(parts[1:])
+    return s
 
   # flags to fill from config when CLI didn't supply them
   for key, dest in [
@@ -91,26 +111,35 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
         if dest in ("template_search",):
           setattr(args_ns, dest, [_join_if_relative(x) for x in val])
         elif dest in ("load",):
-          # Clean up any accidental "index=path" entries into plain paths
-          cleaned: list[str] = []
+          cleaned: List[str] = []
           for x in val:
-            s = str(x)
-            if "=" in s:
-              k, v = s.split("=", 1)
-              if k.isdigit():
-                s = v
+            s = _strip_index_prefix(str(x))
             cleaned.append(_join_if_relative(s))
           setattr(args_ns, dest, cleaned)
+        elif dest in ("load_into",):
+          # Accept list of dicts and/or "KEY=PATH" strings (with possible index prefix)
+          pairs: List[str] = []
+          for item in val:
+            if isinstance(item, dict):
+              for k, v in item.items():
+                pairs.append(f"{k}={_join_if_relative(v)}")
+            else:
+              s = _strip_index_prefix(str(item))
+              if "=" in s:
+                k, v = s.split("=", 1)
+                pairs.append(f"{k}={_join_if_relative(v)}")
+              else:
+                # path-only; CLI will validate (not recommended, but tolerated)
+                pairs.append(_join_if_relative(s))
+          setattr(args_ns, dest, pairs)
         elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
           setattr(args_ns, dest, _rewrite_pairs_rhs(list(val)))
-        #elif isinstance(val, dict) and dest == "load_into":
-          # convert mapping to KEY=PATH_OR_GLOB pairs
         else:
           setattr(args_ns, dest, list(val))
-
+      elif isinstance(val, dict) and dest == "load_into":
+        # convert mapping to KEY=PATH_OR_GLOB pairs
         pairs = []
-
-        for k, v in enumerate(val):
+        for k, v in val.items():
           if isinstance(v, list):
             pairs += [f"{k}={_join_if_relative(item)}" for item in v]
           else:
@@ -118,20 +147,16 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
         setattr(args_ns, dest, pairs)
       else:
         # single -> list
-        if dest in ("template_search"):
+        if dest in ("template_search",):
           setattr(args_ns, dest, [_join_if_relative(val)])
         elif dest in ("load",):
-          s = str(val)
-          if "=" in s:
-            k, v = s.split("=", 1)
-            if k.isdigit():
-              s = v
-          setattr(args_ns, dest, [_join_if_relative(s)])  
+          s = _strip_index_prefix(str(val))
+          setattr(args_ns, dest, [_join_if_relative(s)])
         elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
           setattr(args_ns, dest, _rewrite_pairs_rhs([val] if isinstance(val, str) else list(val)))
         else:
           setattr(args_ns, dest, [val])
-          
+
   # Optional default output path
   if "out" in cfg and getattr(args_ns, "out", None) in (None, ""):
     setattr(args_ns, "out", cfg["out"])
