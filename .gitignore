@@ -1,3 +1,4 @@
 out/*
 .venv/*
 codex.yaml
+*__pycache__*

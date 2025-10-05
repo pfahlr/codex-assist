@@ -11,8 +11,8 @@ from .context_ops import (
 from .structload import load_structured_glob
 from .template_env import render_template
 
-with file.open('./docs/codex_prompt_builder.cli.help.md', 'r') as f:
-  extended_help_text = f.read_file()
+with open('./docs/codex_prompt_builder.cli.help.md', 'r') as f:
+  extended_help_text = f.read()
 
 EXTENDED_HELP = extended_help_text
 
@@ -53,6 +53,11 @@ def build_argparser() -> argparse.ArgumentParser:
 def _apply_load(ctx: Dict[str, Any], patterns):
   from .utils import deep_merge
   for pat in patterns or []:
+    # Accept accidental "index=path" pairs (e.g., "0=/path/file.yaml")
+    if isinstance(pat, str) and "=" in pat:
+      k, v = pat.split("=", 1)
+      if k.isdigit():
+        pat = v
     docs = load_structured_glob(pat)
     for d in docs:
       if isinstance(d, dict):

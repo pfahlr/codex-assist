@@ -88,16 +88,29 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
       val = cfg[key]
       if isinstance(val, list):
         # path-normalize where appropriate
-        if dest in ("template_search", "load"):
+        if dest in ("template_search",):
           setattr(args_ns, dest, [_join_if_relative(x) for x in val])
+        elif dest in ("load",):
+          # Clean up any accidental "index=path" entries into plain paths
+          cleaned: list[str] = []
+          for x in val:
+            s = str(x)
+            if "=" in s:
+              k, v = s.split("=", 1)
+              if k.isdigit():
+                s = v
+            cleaned.append(_join_if_relative(s))
+          setattr(args_ns, dest, cleaned)
         elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
           setattr(args_ns, dest, _rewrite_pairs_rhs(list(val)))
+        #elif isinstance(val, dict) and dest == "load_into":
+          # convert mapping to KEY=PATH_OR_GLOB pairs
         else:
           setattr(args_ns, dest, list(val))
-        elif isinstance(val, dict) and dest == "load_into":
-        # convert mapping to KEY=PATH_OR_GLOB pairs
+
         pairs = []
-        for k, v in val.items():
+
+        for k, v in enumerate(val):
           if isinstance(v, list):
             pairs += [f"{k}={_join_if_relative(item)}" for item in v]
           else:
@@ -105,8 +118,15 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
         setattr(args_ns, dest, pairs)
       else:
         # single -> list
-        if dest in ("template_search", "load"):
+        if dest in ("template_search"):
           setattr(args_ns, dest, [_join_if_relative(val)])
+        elif dest in ("load",):
+          s = str(val)
+          if "=" in s:
+            k, v = s.split("=", 1)
+            if k.isdigit():
+              s = v
+          setattr(args_ns, dest, [_join_if_relative(s)])  
         elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
           setattr(args_ns, dest, _rewrite_pairs_rhs([val] if isinstance(val, str) else list(val)))
         else:
