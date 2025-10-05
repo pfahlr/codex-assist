@@ -54,7 +54,6 @@ def load_config(path: Path) -> Dict[str, Any]:
 
 
 def env_tpl_paths() -> List[str]:
-  # optional, lowest precedence
   val = os.getenv("CODEX_TPL_PATH")
   if not val:
     return []
@@ -107,7 +106,6 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
     if key in cfg and getattr(args_ns, dest, None) == []:
       val = cfg[key]
       if isinstance(val, list):
-        # path-normalize where appropriate
         if dest in ("template_search",):
           setattr(args_ns, dest, [_join_if_relative(x) for x in val])
         elif dest in ("load",):
@@ -116,8 +114,8 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
             s = _strip_index_prefix(str(x))
             cleaned.append(_join_if_relative(s))
           setattr(args_ns, dest, cleaned)
+          setattr(args_ns, "_load_optional", True)           # mark as optional (from config)
         elif dest in ("load_into",):
-          # Accept list of dicts and/or "KEY=PATH" strings (with possible index prefix)
           pairs: List[str] = []
           for item in val:
             if isinstance(item, dict):
@@ -129,15 +127,14 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
                 k, v = s.split("=", 1)
                 pairs.append(f"{k}={_join_if_relative(v)}")
               else:
-                # path-only; CLI will validate (not recommended, but tolerated)
-                pairs.append(_join_if_relative(s))
+                pairs.append(_join_if_relative(s))  # path-only; CLI will validate if used
           setattr(args_ns, dest, pairs)
+          setattr(args_ns, "_load_into_optional", True)      # mark as optional (from config)
         elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
           setattr(args_ns, dest, _rewrite_pairs_rhs(list(val)))
         else:
           setattr(args_ns, dest, list(val))
       elif isinstance(val, dict) and dest == "load_into":
-        # convert mapping to KEY=PATH_OR_GLOB pairs
         pairs = []
         for k, v in val.items():
           if isinstance(v, list):
@@ -145,13 +142,14 @@ def merge_config_into_args(args_ns, cfg: Dict[str, Any], base_dir: Path) -> None
           else:
             pairs.append(f"{k}={_join_if_relative(v)}")
         setattr(args_ns, dest, pairs)
+        setattr(args_ns, "_load_into_optional", True)        # mark as optional (from config)
       else:
-        # single -> list
         if dest in ("template_search",):
           setattr(args_ns, dest, [_join_if_relative(val)])
         elif dest in ("load",):
           s = _strip_index_prefix(str(val))
           setattr(args_ns, dest, [_join_if_relative(s)])
+          setattr(args_ns, "_load_optional", True)           # mark as optional (from config)
         elif dest in ("set_file", "add_file", "set_json_file", "set_file_index"):
           setattr(args_ns, dest, _rewrite_pairs_rhs([val] if isinstance(val, str) else list(val)))
         else:

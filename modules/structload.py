@@ -4,7 +4,7 @@ import glob
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, List
 
 from .utils import die, expand_path, read_text_file
 
@@ -30,7 +30,6 @@ def _parse_yaml(text: str) -> List[Any]:
 
 
 def _read_file_text_resolve(base_dir: Path, path_str: str) -> str:
-  """Read UTF-8 text from a path that may be relative to base_dir."""
   p = Path(expand_path(path_str))
   if not p.is_absolute():
     p = (base_dir / p).resolve()
@@ -38,11 +37,9 @@ def _read_file_text_resolve(base_dir: Path, path_str: str) -> str:
 
 
 def _glob_matches_resolve(base_dir: Path, pattern: str) -> List[Path]:
-  """Glob with lexicographic sort; resolve relative to base_dir."""
   pat = expand_path(pattern)
   if not os.path.isabs(pat):
     pat = str((base_dir / pat).resolve())
-  # glob returns plain strings; normalize to Path and sort
   matches = sorted(glob.glob(pat, recursive=True))
   return [Path(m) for m in matches]
 
@@ -50,23 +47,20 @@ def _glob_matches_resolve(base_dir: Path, pattern: str) -> List[Path]:
 def _apply_macros(node: Any, base_dir: Path) -> Any:
   """Recursively apply $file/$files/$glob/$glob_one (and optional $join)."""
   if isinstance(node, dict):
-    # Macro object?
     keys = set(node.keys())
-    # $file
+
     if "$file" in keys:
       path = node["$file"]
       if not isinstance(path, str):
         die("$file expects a string path")
       return _read_file_text_resolve(base_dir, path)
 
-    # $files
     if "$files" in keys:
       arr = node["$files"]
       if not isinstance(arr, list):
         die("$files expects a list of paths")
       return [_read_file_text_resolve(base_dir, p) for p in arr]
 
-    # $glob / $glob_one (with optional $join)
     if "$glob_one" in keys:
       pattern = node["$glob_one"]
       if not isinstance(pattern, str):
@@ -117,23 +111,44 @@ def load_structured_file(path_str: str) -> List[Any]:
     try:
       docs = [_parse_json(text)]
     except SystemExit:
-      # JSON failed with die -> try YAML
       docs = _parse_yaml(text)
 
   base_dir = p.parent
   return [_apply_macros(doc, base_dir) for doc in docs]
 
 
-def load_structured_glob(pattern: str) -> List[Any]:
-  """Load one or more structured files via glob pattern. If no glob match,
-  treat input as a single file path.
+def load_structured_glob(pattern: str, *, optional: bool = False) -> List[Any]:
+  """Load one or more structured files via glob pattern.
+
+  Behavior:
+    - If pattern has glob magic and matches files -> load all (sorted).
+    - If pattern has glob magic but matches none:
+        * optional=True  -> return []
+        * optional=False -> error
+    - If pattern is a single path:
+        * exists -> load it
+        * missing:
+            optional=True  -> return []
+            optional=False -> error
   """
   pat = expand_path(pattern)
-  matches = sorted(glob.glob(pat, recursive=True))
-  out: List[Any] = []
-  if matches:
+  has_magic = glob.has_magic(pat)
+
+  if has_magic:
+    matches = sorted(glob.glob(pat, recursive=True))
+    if not matches:
+      if optional:
+        return []
+      die(f"Structured file not found: {pat}")
+    out: List[Any] = []
     for m in matches:
       out.extend(load_structured_file(m))
     return out
-  # No glob matches: treat as single file path and load (will die if missing)
+
+  # Single file path
+  p = Path(pat)
+  if not p.exists():
+    if optional:
+      return []
+    die(f"Structured file not found: {p}")
   return load_structured_file(pat)
