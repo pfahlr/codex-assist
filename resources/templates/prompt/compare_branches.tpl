@@ -39,16 +39,7 @@ git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GI
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin
-
-{% for b in BRANCHES %}
-git fetch origin refs/heads/{{b}}:refs/remotes/origin/{{b}}
-{% endfor %}
-
-mkdir diffs;
-
-{% for b in BRANCHES %}
-git diff {{b}} > diffs/{{b}}.diff
-{% endfor %}
+```
 
 ### Output (strict) ###
 Create a yaml document at 'codex/agents/TASKS/TEMPORARY_CODEX_TASK.yaml`
