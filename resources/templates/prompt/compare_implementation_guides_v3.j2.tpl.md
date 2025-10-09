@@ -26,6 +26,8 @@ Also include:
 * **Synthesis rationale**: Which elements from which branch form the ideal architecture?
 * **Optional enhancements**: Tooling, testing, architecture, modularity, observability
 
+write the review to `codex/agents/REVIEWS/P2/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
+
 ---
 
 ### 🧭 Step Prompting Phase: Synthesis Preview
@@ -36,6 +38,8 @@ Before generating the final implementation plan, generate a `plan_preview` secti
 * What conflicts exist and how you’ll resolve them
 * Which parts of the DSL policy engine require redesign or simplification
 * Any open questions or tradeoffs
+
+write the plan preview to the file `codex/agents/PREVIEWS/P2/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
 
 Wait for confirmation if interactive. Then continue.
 
@@ -51,6 +55,8 @@ Your output MUST be:
   * `execution_mode`: `always`, `optional`, or `manual`
   * `reusable`: true or false
   * `adapted_from_branch`, `depends_on`, `tests`, `artifacts`, etc.
+
+write the final implementation plan to `codex/agents/TASKS_FINAL/P2/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
 
 ---
 
@@ -183,7 +189,12 @@ git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin;
 
+{% for b in BRANCHES %}
+git fetch origin refs/heads/{{b}}:refs/remotes/origin/{{b}} 
+{% endfor %}
+
 mkdir diffs;
+
 {% for b in BRANCHES %}
 git diff {{b}} > diffs/{{b}}.diff
 {% endfor %}

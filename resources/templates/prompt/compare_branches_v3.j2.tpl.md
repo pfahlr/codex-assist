@@ -114,6 +114,8 @@ traceability_checklist:
   - must-raise: PolicyViolationError
 ```
 
+write the review to `codex/agents/REVIEWS/P1/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
+
 ---
 
 #### Output B: Unified Codex Task Plan
@@ -195,7 +197,21 @@ tasks:
     artifacts:
       - name: policy_event_schema
         file: codex/specs/schemas/policy_trace_event.schema.json
+        
+  handoff_contract:
+    expected_consumer: gpt-5-codex
+    input_format: schema://codex/specs/schemas/full_task.schema.json
+    output_type: executable-python+unit-tests
+
+  codex_directives:
+    must:
+      - attribute reused logic to specific branches
+      - emit `policy_resolved` trace
+    do_not:
+      - invent tools or APIs not seen in diffs
+      - reuse test logic without attribution
 ```
+write the final implementation plan to `codex/agents/TASKS_FINAL/P1/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
 
 ---
 
@@ -206,8 +222,6 @@ post_execution_feedback:
   was_successful: null
   failed_tasks: []
   recommended_revisions: []
-```
-
 handoff_contract:
   expected_consumer: gpt-5-codex
   input_format: schema://codex/specs/schemas/full_task.schema.json
@@ -219,8 +233,11 @@ codex_directives:
     - emit `policy_resolved` trace
   do_not:
     - invent tools or APIs not seen in diffs
-    - reuse test logic without attribution
+    - reuse test logic without attribution  
+  
 ```
+
+write the post-execution feedback to `codex/agents/POSTEXECUTION/P1/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
 
 ---
 
@@ -235,7 +252,12 @@ git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin;
 
+{% for b in BRANCHES %}
+git fetch origin refs/heads/{{b}}:refs/remotes/origin/{{b}} 
+{% endfor %}
+
 mkdir diffs;
+
 {% for b in BRANCHES %}
 git diff {{b}} > diffs/{{b}}.diff
 {% endfor %}
