@@ -110,7 +110,7 @@ codex/agents/POSTEXECUTION/P2/{{CODEX_TASK}}-<unique_identifier_for_this_codex_r
 OWNER={{OWNER}}
 REPO={{REPO}} : 
 "${GITHUB_TOKEN:=$CODEX_READ_ALL_REPOSITORIES_TOKEN:-}"
-git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/{{OWNER}}/{{REPO_NAME}}.git"
+git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/{{OWNER}}/{{REPO}}.git"
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin;
