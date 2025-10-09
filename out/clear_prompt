@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo "<[/~~PROMPT~~]>" >> prompt.history.log
+echo " " >> prompt.history.log
+echo "---" >> prompt.history.log
+date >> prompt.history.log
+echo "---" >> prompt.history.log
+echo " " >> prompt.history.log
+echo "<[~~PROMPT~~]>" >> prompt.history.log
+cat prompt.md >> prompt.history.log
+rm prompt.md
+
