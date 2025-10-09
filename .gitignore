@@ -2,3 +2,4 @@ out/*
 .venv/*
 codex.yaml
 *__pycache__*
+input.yaml

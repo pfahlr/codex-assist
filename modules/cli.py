@@ -14,7 +14,7 @@ from .context_ops import (
 from .structload import load_structured_glob
 from .template_env import render_template
 
-with open('../docs/codex_prompt_builder.cli.help.md') as f:
+with open('./docs/codex_prompt_builder.cli.help.md') as f:
   helptext = f.read()
 
 EXTENDED_HELP = helptext
@@ -23,7 +23,7 @@ def build_argparser() -> argparse.ArgumentParser:
   p = argparse.ArgumentParser(
     description="Render a Jinja2 template with values from CLI flags (modular Codex Assistant).",
     formatter_class=argparse.RawTextHelpFormatter,
-    epilog="Tip: run with --help-extended for configuration schema and examples."
+    epilog=EXTENDED_HELP
   )
   p.add_argument("--template-name", required=True, help="Path to the Jinja2 template file.")
   p.add_argument("--template-search", action="append", default=[], help="Additional template/include search paths. Repeatable.")
@@ -109,6 +109,9 @@ def _apply_load_into(ctx: Dict[str, Any], pairs, *, optional: bool):
 def main() -> None:
   p = build_argparser()
   args = p.parse_args()
+
+  print(EXTENDED_HELP)
+  print(args)
 
   if args.help_extended:
     print(EXTENDED_HELP.strip()); return
