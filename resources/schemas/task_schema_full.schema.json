@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/ragx_task.schema.json",
+  "$id": "https://github.com/pfahlr/ragx/blob/main/codex/specs/schemas/full_task.schema.json",
   "title": "RAGX Task Spec",
   "type": "object",
   "additionalProperties": false,
@@ -24,6 +24,34 @@
     "title": { "type": "string", "minLength": 1 },
     "summary": { "type": "string", "minLength": 1 },
     "description": { "type": "string", "minLength": 1 },
+
+    "diff_analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "comparisons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "git_diff", "commentary"],
+            "properties": {
+              "from": { "type": "string" },
+              "to": { "type": "string" },
+              "git_diff": { "type": "string" },
+              "commentary": { "type": "string" }
+            }
+          }
+        },
+        "summary_of_findings": {
+          "type": "object",
+          "properties": {
+            "common_flaws": { "type": "array", "items": { "type": "string" } },
+            "unique_strengths": { "type": "array", "items": { "type": "string" } },
+            "critical_gaps": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
 
     "metadata": {
       "type": "object",
@@ -67,6 +95,22 @@
         "deterministic": { "type": "boolean" },
         "golden_management": { "enum": ["manual", "label-gated"] }
       }
+    },
+
+    "function_implementation": {
+      "type":"object",
+      "additionalProperties": false,
+      "required":["path", "code", "return_type", "argument_list"],
+      "properties": {
+         "path_to_containing_file": { "type": "string" },
+         "function_name": {"type": "string"},
+         "code": { "type": "string" },
+         "return_type": { "type": "string" },
+         "argument_list": {
+            "type": "array",
+            "items": {"type": "string" },
+         },
+       }
     },
 
     "scope": {

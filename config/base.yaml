@@ -1,4 +1,3 @@
-owner: pfahlr
-repo: ragx
-intro: { $file: docs/intro.md }
-sections: { $glob: docs/parts/*.md, $join: "\n\n---\n\n" }
+OWNER: 'pfahlr'
+REPO: 'ragx2'
+

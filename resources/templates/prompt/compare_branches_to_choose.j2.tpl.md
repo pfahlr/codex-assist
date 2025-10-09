@@ -16,7 +16,7 @@ Then, for each implementation:
 ---
 
 ### GitHub Context ###
-Repository: `https://github.com/pfahlr/ragx.git`
+Repository: `https://github.com/pfahlr/{{REPO_NAME}}.git`
 
 Branches under analysis:
 {% for b in BRANCHES %}
@@ -46,7 +46,7 @@ Produce a **strict YAML** file as output, starting with:
 ```yaml
 meta:
   code_task: {{ CODEX_TASK }}
-  repo: pfahlr/ragx
+  repo: pfahlr/{{REPO_NAME}}
   last_updated: YYYY-MM-DD
 ```
 
@@ -87,85 +87,15 @@ This version has been specifically adapted for `gpt-5-codex-high`'s capabilities
 
 ---
 
-````
-### Instruction ###
-You are a senior AI reviewer with expertise in GitHub multi-branch workflows, software architecture, and code quality analysis. You are tasked with:
-
-🎯 Primary Objective:
-Generate a **ranked list of Git branches**, evaluating their respective implementations of the following task:
-> **{{ CODEX_TASK }}**
-
-Then, for each implementation:
-- Break it into **atomic, modular improvements** (featurelets)
-- Assign each featurelet a **mini-prompt** to allow manual porting or merging
-- Provide both:
-  - a brief **theoretical basis** (e.g., pattern, principle, algorithm)
-  - a **real-world justification or scenario**
-
----
-
-### GitHub Context ###
-Repository: `https://github.com/pfahlr/ragx.git`
-
-Branches under analysis:
-{% for b in BRANCHES %}
-- {{ b }}
-{% endfor %}
-
-You have read access to all branches using the GitHub token: `CODEX_READ_ALL_REPOSITORIES_TOKEN`
-
----
-
-### Evaluation Criteria ###
-You MUST:
-- Rank branches from **most complete and robust** to **least desirable**
-- Justify rankings with **technical clarity**
-- Identify:
-  * Redundancies, errors, hallucinations
-  * Unique or standout solutions
-  * Missing pieces or failure modes
-  * Theoretical strengths (e.g., algorithmic soundness, design pattern use)
-  * Real-world dev experience analogs (e.g., fault tolerance, performance under load)
-
----
-
-### Output Format ###
-Produce a **strict YAML** file as output, starting with:
-```yaml
-meta:
-  code_task: {{ CODEX_TASK }}
-  repo: pfahlr/ragx
-  last_updated: YYYY-MM-DD
-````
-
-Then follow with:
-
-```yaml
-branch_ranking:
-  - branch: <branch_name>
-    rank: <number>
-    rationale: "<short justification>"
-
-feature_breakdown:
-  - origin_branch: <branch_name>
-    feature_name: "<title of improvement>"
-    modular_prompt: "<write this like a portable prompt>"
-    theoretical_basis: "<e.g., DRY, async resilience, transformer caching>"
-    real_world_value: "<example scenario or practical dev insight>"
-    desirability_score: <1-10>
-```
-
----
-
 ### Git Pre-flight Setup
 
 Use the following Git-safe setup in your sandboxed environment:
 
 ```bash
 OWNER=pfahlr
-REPO=ragx
+REPO={{REPO_NAME}}
 : "${GITHUB_TOKEN:=$CODEX_READ_ALL_REPOSITORIES_TOKEN:-}"
-git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/pfahlr/ragx.git"
+git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/pfahlr/{{REPO_NAME}}.git"
 git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin

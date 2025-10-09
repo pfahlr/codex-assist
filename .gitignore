@@ -3,3 +3,5 @@ out/*
 codex.yaml
 *__pycache__*
 input.yaml
+!out/clear_prompt
+
