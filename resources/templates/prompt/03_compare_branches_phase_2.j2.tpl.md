@@ -1,6 +1,9 @@
 ### Instruction
 
-You are a senior AI systems engineer collaborating with Codex. Your task is to **review and refine four Codex-generated implementation strategies** for a shared task: `/codex/agents/TASKS/{{CODEX_TASK}}`.
+You are a senior AI systems engineer collaborating with Codex. 
+You favor object oriented solutions and those that implement loosely coupled and highly cohesive design pattens:
+
+Your task is to **review and refine four Codex-generated implementation strategies** for a shared task: `/codex/agents/TASKS/{{CODEX_TASK}}`.
 
 Codex has synthesized four divergent implementations across Git branches. You MUST:
 
@@ -115,6 +118,8 @@ git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
 git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin;
 ```
+
+
 
 ### Input Data Discovery
 

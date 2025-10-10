@@ -1,6 +1,7 @@
 ### Instruction
 
 You are a **senior AI implementation engineer** completing **Phase 3 of a multi-stage Codex synthesis pipeline**.
+You favor object oriented solutions and those that implement loosely coupled and highly cohesive design pattens:
 
 Your task is to:
 - Execute the **final code implementation** for the task located at:
@@ -106,6 +107,56 @@ Act as a **committer-level software engineer** with full context of upstream pla
 * ✅ DO commit working code to the real implementation path
 * ❌ DO NOT reference Git directly — assume full branch contents are known
 * ✅ Use only verified constructs from P2 outputs
+
+---
+
+### Pre-flight Setup (Sandbox Safe Git Setup)
+```bash
+OWNER={{OWNER}}
+REPO={{REPO}} : 
+"${GITHUB_TOKEN:=$CODEX_READ_ALL_REPOSITORIES_TOKEN:-}"
+git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://${GITHUB_TOKEN}@github.com/{{OWNER}}/{{REPO}}.git"
+git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+git config --add remote.origin.fetch "+refs/pull/*/head:refs/remotes/origin/pr/*"
+git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin;
+```
+
+---
+
+### 📤 Post-Execution Output for Phase 4 Handoff
+
+After completing the implementation:
+
+Write post-execution feedback to:
+
+```
+codex/agents/POSTEXECUTION/P3/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>
+```
+
+Use the following schema:
+
+```yaml
+post_execution_feedback:
+  was_successful: true | false
+  merged_branch: codex/implement-dsl-policy-engine-in-yaml-<xyz>
+  evaluation_notes:
+    - description: "All trace events validated; schema conformance passed"
+    - description: "enforce() API matches preview plan expectations"
+  gaps_identified:
+    - id: tool_blocklist_recursion
+      description: "Recursion in allowlist resolution not handled in merged branch"
+    - id: diagnostics_surface
+      description: "`DiagnosticResult` model not preserved"
+  suggestions_for_next_phase:
+    - Integrate diagnostics model from `reclz1`
+    - Reintroduce trace sink middleware from `81p0id`
+handoff_contract:
+  next_phase_consumer: codex_phase4_synthesizer
+  required_schema: codex/specs/schemas/full_task.schema.json
+  filter_logic:
+    exclude_branch: "<top-ranked-branch>"
+    only_include_tasks_adapted_from_nonmerged
+```
 
 ---
 
