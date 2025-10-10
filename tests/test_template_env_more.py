@@ -20,3 +20,12 @@ def test_zip_filter_mismatched_lengths(tmp_path):
     out = render_template(tfile, {"A": [1, 2, 3], "B": ["x"]}, extra_search=[str(tmp_path)])
     # only one pair should render
     assert out.strip() == "[1-x]"
+
+
+def test_to_nice_yaml_filter(tmp_path):
+    tfile = tmp_path / "t.tpl"
+    tfile.write_text("{{ data|to_nice_yaml(indent=4) }}", encoding="utf-8")
+    ctx = {"data": {"name": "Example", "items": [1, 2]}}
+    out = render_template(tfile, ctx, extra_search=[str(tmp_path)])
+    expected = "name: Example\nitems:\n- 1\n- 2\n"
+    assert out == expected
