@@ -1,1 +1,9 @@
-__all__ = ["cli", "config", "context_ops", "structload", "template_env", "utils"]
+__all__ = [
+    "cli",
+    "config",
+    "context_ops",
+    "jinja_filters",
+    "structload",
+    "template_env",
+    "utils",
+]
