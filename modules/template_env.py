@@ -2,7 +2,8 @@ from __future__ import annotations
 import os, glob, json
 from pathlib import Path
 from typing import Any, List, Sequence
-from .utils import ensure_jinja2, expand_path, read_text_file, die
+from .utils import ensure_jinja2, expand_path, die
+from .jinja_filters import register_filters
 
 def _dedupe_keep_order(items: Sequence[str]) -> List[str]:
   seen, out = set(), []
@@ -58,7 +59,7 @@ def render_template(template_path: Path, context: dict, extra_search: List[str])
   search_paths = _dedupe_keep_order([base_dir] + [str(Path(p).resolve()) for p in extra_search] + [os.getcwd()])
   loader = ChoiceLoader([FileSystemLoader(search_paths)])
   env = jinja2.Environment(loader=loader, autoescape=False, trim_blocks=True, lstrip_blocks=True)
-  env.filters['zip'] = lambda a, b: list(zip(a or [], b or []))
+  register_filters(env)
   include_text, read_file, include_text_glob, glob_paths, read_json = _make_include_helpers(search_paths)
   env.globals.update({
     'include_text': include_text,
