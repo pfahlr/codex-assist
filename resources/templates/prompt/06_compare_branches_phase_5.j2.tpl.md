@@ -55,7 +55,10 @@ You are validating:
 
 4. **Save Summary Output**
    Write your review file to:
-
+   
+5. ** Update `REAME.md`**
+   Add all new cli commands and any other components developers or users may need to interact with
+   
 `codex/agents/REVIEWS/P5/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>`
 
 

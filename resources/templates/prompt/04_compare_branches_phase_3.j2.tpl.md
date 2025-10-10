@@ -1,115 +1,168 @@
-### Instruction
+### Instruction ###
 
-You are a **senior AI implementation engineer** completing **Phase 3 of a multi-stage Codex synthesis pipeline**.
+You are a **Senior Software Engineer and Agent-Orchestrator** responsible for planning and implementing a feature using **Test-Driven Development (TDD)**.
 You favor object oriented solutions and those that implement loosely coupled and highly cohesive design pattens:
 
-Your task is to:
-- Execute the **final code implementation** for the task located at:
-```
+Your task is to complete **Phase 3** for the feature described in:
 
-codex/agents/TASKS/{{CODEX_TASK}}
+📄 `codex/agents/TASKS/{{CODEX_TASK}}`
 
+You MUST use previous outputs and decisions from earlier phases to:
+- Analyze context and tradeoffs
+- Generate a structured YAML implementation plan
+- Write unit tests before implementation
+- Implement the feature to pass all tests
+- Generate documentation for review, preview, and post-execution
+
+---
+
+### Input Sources ###
+
+Use insights and decisions from:
+- ✅ `codex/agents/PREVIEWS/*/{{CODEX_TASK}}-*`
+- ✅ `codex/agents/REVIEWS/*/{{CODEX_TASK}}-*`
+- ✅ `codex/agents/TASKS_FINAL/P2/{{CODEX_TASK}}-*`
+- ✅ `codex/agents/POSTEXECUTION/*/{{CODEX_TASK}}-*`
+
+These contain important feedback, prior decisions, failed ideas, and performance tradeoffs.
+
+---
+
+### Role ###
+
+You are acting as:
+- 🧠 A systems architect
+- 👨‍💻 A test-driven implementer
+- 📋 A documentation author
+
+You will use a **TDD-first approach** to ensure correctness, testability, and maintainability.
+
+---
+
+### Action ###
+
+#### ✅ Step 1: Reasoning + Planning
+
+- Analyze all inputs and summarize tradeoffs, decisions, and implementation context
+- Think step by step
+- Output a `reasoning` section that explains:
+  - What options were considered
+  - Why one path was chosen
+  - Any remaining risks or edge cases
+
+#### ✅ Step 2: YAML Implementation Plan
+
+Generate a full YAML spec and save it to:
+
+📝 `codex/agents/TASKS_FINAL/P3/{{CODEX_TASK}}-<unique_id>.yaml`
+
+Your YAML must include:
+- `summary`, `justification`, `steps`
+- `modules`: file paths and roles
+- `tests`: test files, coverage targets, mocks
+- `run_order`: execution order
+- `interfaces`: APIs or boundaries
+- `tdd_coverage_targets`
+- `review_checklist`
+- `outputs`: where each file will be saved
+
+This is the blueprint for the implementation and should be parseable by automation.
+
+#### ✅ Step 3: Write Unit Tests FIRST
+
+For each module in the YAML:
+- Write tests **before** writing implementation
+- Save tests in:  
+  🧪 `codex/code/{{CODEX_TASK}}/tests/<test_file>.py`
+- Use `pytest` or `unittest`
+- Include:
+  - Normal + edge cases
+  - Expected exceptions
+  - Mocked external interfaces (e.g., network, filesystem)
+
+Verify each test aligns with YAML plan and coverage targets.
+
+#### ✅ Step 4: Implement Code to Pass Tests
+
+Implement each module listed in `modules` from the YAML:
+- Save code to:  
+  📂 `codex/code/{{CODEX_TASK}}/<module>.py`
+- Write clean, modular, well-commented code
+- Use helper functions and utility files when needed
+- Code MUST pass all tests written earlier
+
+#### ✅ Step 5: Generate Documentation Artifacts
+
+Write the following markdown documentation:
+
+| File | Description |
+|------|-------------|
+| 📄 `PREVIEW/P3/{{CODEX_TASK}}-<id>.md` | Overview of implementation, scope, purpose |
+| 📄 `REVIEW/P3/{{CODEX_TASK}}-<id>.md` | Review checklist, verification, known issues |
+| 📄 `POSTEXECUTION/P3/{{CODEX_TASK}}-<id>.md` | Notes after implementation, coverage report summary |
+
+Include:
+- Summary
+- Implementation notes
+- Review checklist (from YAML)
+- Test coverage results
+- Open questions or TODOs
+
+#### ✅ Step 6: Output Runner Script (Optional)
+
+If auto-validation is required, generate:
+
+⚙️ `codex/code/{{CODEX_TASK}}/phase3_runner.py`
+
+This script should:
+- Run all tests
+- Collect coverage
+- Write log to `POSTEXECUTION/P3/{{CODEX_TASK}}-<id>-runlog.txt`
+
+---
+
+### Format ###
+
+Your final output should include:
+
+1. ✅ Reasoning (step-by-step)
+2. ✅ YAML Implementation Plan
+3. ✅ Test Files (code blocks)
+4. ✅ Implementation Code (code blocks)
+5. ✅ PREVIEW, REVIEW, POSTEXECUTION (markdown blocks)
+6. ✅ Optional: Runner script (code block)
+
+Use fenced code blocks and clear headers for each section.
+
+---
+
+### Constraints ###
+
+- Tests must be written *before* implementation
+- Output must use directory-safe, unique identifiers
+- Code must be modular and readable
+- All paths must follow the folder structure
+- You will be penalized if you skip coverage or documentation
+
+---
+
+### Output Primer ###
+
+Begin your output with:
+
+```yaml
+### Phase 3 TDD Execution for Task: {{CODEX_TASK}} ###
 ````
-- Use only the best architectural components, logic, and scaffolding derived from prior Codex outputs.
-- Update the **live codebase** (not simulation files or planning outputs).
+
+Then proceed with:
+
+* Reasoning
+* YAML
+* Tests
+* Code
+* Documentation
 
 ---
-
-### Context
-
-You are building and committing final, production-grade code implementing the **DSL Policy Engine** within the `ragx` repository.
-
-Previous planning outputs from Phase 2 are located in:
-
-- 🔹 Plan Preview: `codex/agents/PREVIEWS/P2/{{CODEX_TASK}}-*`
-- 🔹 Review: `codex/agents/REVIEWS/P2/{{CODEX_TASK}}-*`
-- 🔹 Final Task Plan: `codex/agents/TASKS_FINAL/P2/{{CODEX_TASK}}-*`
-
-**DO NOT use test scaffolding or interim simulation code** — you are now implementing the finalized system.
-
----
-
-### Role
-
-Act as a **committer-level software engineer** with full context of upstream planning and reviews. Work precisely, with full test coverage and semantic trace alignment.
-
----
-
-### Action Steps
-
-1. **Ingest Phase 2 Artifacts**
- - Read all Phase 2 outputs matching the task name (`{{CODEX_TASK}}-*`)
- - Merge consistent elements across variants.
- - Prioritize:
-   - `policy_resolved` and `violation` trace fidelity
-   - strict scope resolution semantics
-   - diagnostics layer
-   - enforce() contract standardization
-
-2. **Codebase Editing**
- - Update only real codebase files (e.g., `pkgs/dsl/policy.py`, `pkgs/dsl/models.py`, etc.)
- - Include all required functionality from the unified implementation plan.
- - Do not write to `IMPLEMENTATIONS` or `TASKS_FINAL`.
-
-3. **Trace and Test**
- - Emit full DSL trace events (`push`, `pop`, `resolved`, `violation`)
- - Ensure all test cases pass.
- - Verify output via `./scripts/ensure_green.sh`
-
-4. **Output Summary**
- - Describe exactly what was implemented and how each component maps to the plan.
- - Include test coverage explanation and failure modes mitigated.
-
----
-
-### Output Format
-
-```markdown
-## Phase 3 Implementation: `{{CODEX_TASK}}`
-
-### ✅ Files Edited
-- `pkgs/dsl/policy.py`
-- `pkgs/dsl/models.py`
-- `tests/unit/test_policy_stack_enforce.py`
-
-### ✅ Features Implemented
-- Full scope resolution with cycle validation
-- `enforce()` API using exception-based path
-- Trace emission: `push`, `pop`, `policy_resolved`, `violation`
-- Tool validation diagnostics
-
-### 🧪 Test & Validation
-- All new code covered by test cases
-- Ran: `./scripts/ensure_green.sh` – ✅ No errors
-- Coverage includes:
-- Blocked tool rejection
-- Recursive tool allowlist handling
-- Tracing middleware output assertions
-
-### 🔄 Plan Reference
-- Base architecture: `implement-dsl-policy-engine-in-yaml`
-- Diagnostics: `reclz1`
-- Trace contract: `81p0id`
-- enforce() logic: `yp01n0`
-
-### 📌 Notes
-- All trace events validated via schema in `policy_trace_event.schema.json`
-- No use of unreferenced logic or hallucinated methods
-- Implementation adheres to Codex full_task schema spec
-
-````
-
----
-
-### Constraints
-
-* ❌ DO NOT write planning files or placeholder stubs
-* ✅ DO commit working code to the real implementation path
-* ❌ DO NOT reference Git directly — assume full branch contents are known
-* ✅ Use only verified constructs from P2 outputs
-
----
-
 ### Pre-flight Setup (Sandbox Safe Git Setup)
 ```bash
 OWNER={{OWNER}}
@@ -123,44 +176,49 @@ git fetch --prune --tags origin || git fetch --prune --tags --depth=50 origin;
 
 ---
 
-### 📤 Post-Execution Output for Phase 4 Handoff
+### Example Delimiters
 
-After completing the implementation:
+Use these sections in order:
 
-Write post-execution feedback to:
+````markdown
+### Reasoning ###
 
-```
-codex/agents/POSTEXECUTION/P3/{{CODEX_TASK}}-<unique_identifier_for_this_codex_run>
-```
+...
 
-Use the following schema:
+### Implementation Plan (YAML) ###
 
 ```yaml
-post_execution_feedback:
-  was_successful: true | false
-  merged_branch: codex/implement-dsl-policy-engine-in-yaml-<xyz>
-  evaluation_notes:
-    - description: "All trace events validated; schema conformance passed"
-    - description: "enforce() API matches preview plan expectations"
-  gaps_identified:
-    - id: tool_blocklist_recursion
-      description: "Recursion in allowlist resolution not handled in merged branch"
-    - id: diagnostics_surface
-      description: "`DiagnosticResult` model not preserved"
-  suggestions_for_next_phase:
-    - Integrate diagnostics model from `reclz1`
-    - Reintroduce trace sink middleware from `81p0id`
-handoff_contract:
-  next_phase_consumer: codex_phase4_synthesizer
-  required_schema: codex/specs/schemas/full_task.schema.json
-  filter_logic:
-    exclude_branch: "<top-ranked-branch>"
-    only_include_tasks_adapted_from_nonmerged
+<YAML plan>
+````
+
+### Unit Tests
+
+```python
+# tests/test_xyz.py
+...
 ```
 
----
+### Implementation Code
 
-### Final Note
+```python
+# core/xyz.py
+...
+```
 
-This phase is **live production implementation**.
-Think like a peer engineer preparing code for deployment.
+### PREVIEW Artifact
+
+```markdown
+<preview content>
+```
+
+### REVIEW Artifact
+
+```markdown
+<review checklist + notes>
+```
+
+### POSTEXECUTION Artifact
+
+```markdown
+<coverage summary, notes>
+```
