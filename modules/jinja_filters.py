@@ -28,7 +28,7 @@ def _require_yaml() -> Any:
 def to_nice_yaml(value: Any, indent: int = 2) -> str:
   """Render the provided value as a human-friendly YAML string."""
   module = _require_yaml()
-  return module.dump(value, default_flow_style=False, sort_keys=False, indent=indent)
+  return module.dump(value, default_flow_style=False, sort_keys=False, indent=indent, allow_unicode=True)
 
 
 def zip_lists(a: Optional[Sequence[Any]], b: Optional[Sequence[Any]]) -> list[tuple[Any, Any]]:
