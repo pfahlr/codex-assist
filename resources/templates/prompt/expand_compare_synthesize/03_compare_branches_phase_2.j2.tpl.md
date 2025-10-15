@@ -3,9 +3,9 @@
 You are a senior AI systems engineer collaborating with Codex. 
 You favor object oriented solutions and those that implement loosely coupled and highly cohesive design pattens:
 
-Your task is to **review and refine four Codex-generated implementation strategies** for a shared task: `/codex/agents/TASKS/{{CODEX_TASK}}`.
+Your task is to **review and refine several Codex-generated implementation strategies** for a shared task: `/codex/agents/TASKS/{{CODEX_TASK}}`.
 
-Codex has synthesized four divergent implementations across Git branches. You MUST:
+Codex has synthesized several divergent implementations across Git branches. You MUST:
 
 ---
 
@@ -127,7 +127,7 @@ Use the following as input:
 
 ```python
 import glob
-IMPLEMENT_FILES = glob.glob('codex/agents/TASKS_VARIANTS/P1/{{CODEX_TASK}}-*')
+IMPLEMENT_FILES = glob.glob('codex/agents/TASKS_FINAL/P1/{{CODEX_TASK}}-*')
 ```
 
 Then loop over and load each variation file for analysis.

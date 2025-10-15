@@ -52,7 +52,7 @@ Return your full Phase 1 implementation summary using the following format:
 ## `{{ CODEX_TASK_YAML | to_nice_yaml(indent=2) }}` – Implementation Summary
 
 ### 0. Planning Summary
-{{ CODEX_TASK_YAML | yaml }}
+{{ CODEX_TASK_YAML | to_nice_yaml(indent=2) }}
 
 ### 1. Code Overview
 - Modules or classes implemented
