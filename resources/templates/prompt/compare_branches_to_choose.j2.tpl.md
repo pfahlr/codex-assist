@@ -71,21 +71,8 @@ feature_breakdown:
     desirability_score: <1-10>
 ```
 
+Then describe in human readable content, the reasoning behind your rankings, what each of the features do, and what are the potential advantages / disadvantages to including or not including them. Provide your response in markdown format. 
 
-Perfect — since your target model is `gpt-5-codex-high`, that unlocks several advanced prompt engineering techniques we can safely use to maximize **structure**, **clarity**, and **modular reusability**. This model is known for:
-
-* Superior **code reasoning and diff understanding**
-* Better **Git-aware context compression**
-* Higher token budget, ideal for **deep comparisons across many branches**
-* Strong adherence to **structured output formats like YAML/JSON**
-
----
-
-### ✅ Finalized Optimized Prompt for `gpt-5-codex-high`
-
-This version has been specifically adapted for `gpt-5-codex-high`'s capabilities — including deeper diff traversal, multiple-branch analysis, and structured outputs. It fully supports modular feature prompting, branch ranking, and theoretical/real-world justifications.
-
----
 
 ### Git Pre-flight Setup
 
